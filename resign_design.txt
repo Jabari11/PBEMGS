@@ -1,0 +1,40 @@
+Yeah, a separate resignations_in_progress table is probably the cleanest and most flexible approach. It avoids cluttering your existing game tables with extra columns for a relatively rare event like a pending resignation.
+
+Proposed Schema:
+
+CREATE TABLE resignations_in_progress (
+    game_type ENUM('tac', 'ninetac', 'ataxx', 'surge') NOT NULL,
+    game_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (game_type, game_id, user_id)
+);
+
+Why this is clean:
+Composite primary key prevents duplicate resignation attempts.
+You can easily look up by game type and game ID when a confirm/cancel comes in.
+It avoids touching any game state logic unless the resign is finalized.
+If a player makes a valid move, you can simply DELETE FROM resignations_in_progress WHERE game_type=? AND game_id=? AND user_id=? to cancel it.
+
+Handling Flow:
+Command	Action
+resign [game_type] [game_id]	Insert into resignations_in_progress if not already there. Send confirmation message.
+confirm_resign [game_type] [game_id]	Lookup in resignations_in_progress. If found, call handleResign() on the game type’s logic, and then delete the row.
+Any valid move	Before processing move, DELETE the matching row from resignations_in_progress just in case.
+handleResign(gameId, userId) stubs for each game:
+Each game type can implement that in its own way:
+
+Tac, Ninetac: Set the game to complete immediately.
+Ataxx: Auto-pass player on future turns. Could remove their pieces, but auto-pass is easier.
+Surge: Convert their squares/geysers to neutral. Optional: decide on open vs closed gates.
+You could define an interface like this in the base game class:
+
+public interface ResignableGame {
+    void handleResign(long gameId, long userId);
+}
+And implement it where needed.
+
+Bonus: Safety Checks (Optional)
+Limit resign attempts per player per day (to prevent spam resigns if you care).
+Send a final "you resigned from Game X" email on completion.
+Cancel all pending resignations when a game completes (e.g., foreign key with ON DELETE CASCADE if you ever clean up old games).

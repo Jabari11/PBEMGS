@@ -1,0 +1,17 @@
+The Curious Tester Hook:
+
+📨 Looking for play-by-email game testers!
+I’ve built a new system for async, email-based games—starting with an original take on Tic-Tac-Toe (Ninetac) and Ataxx. No installs, no logins—just send an email to start playing.
+Want to help me test? Send an email to pbemgs@angryturtlestudios.com with the subject help to see how it works!
+
+The Nostalgia Hook (for async gamers):
+
+💌 Remember Play-by-Mail games? Now you can play async strategy games by email—no accounts, no hassle.
+The system is fully working and needs testers! Play Ninetac (a deep twist on Tic-Tac-Toe) or Ataxx with friends at your own pace.
+Send an email to pbemgs@angryturtlestudios.com with help in the subject to check it out!
+
+The Unique Concept Hook (for game dev/gamer discords):
+
+🛠️ I built a fully working Play-By-Email game server!
+You send commands by email, the system runs the game, and updates get emailed back to you. Starting with Ninetac (a new strategy game) and Ataxx.
+Looking for people to help test & break it! Just email pbemgs@angryturtlestudios.com with info in the subject and see what happens!

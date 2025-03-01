@@ -1,0 +1,24 @@
+package com.pbemgs.model;
+
+public enum Command {
+    INTRO,
+    HELP_BASE,
+    TEST_DISPLAY,
+    GAME_LIST,
+    CHECK_HANDLE,
+    CREATE_ACCOUNT,
+    RULES,
+    CREATE_GAME,
+    OPEN_GAMES,
+    JOIN_GAME,
+    MY_GAMES,
+    GAME_STATUS,
+    MOVE,
+    FEEDBACK,
+    ACTIVATE,
+    DEACTIVATE,
+    GLOBAL_NOTIFICATION,
+    NOTIFICATION_RETURN,
+    LIST_NEW_USERS,
+    TEST_SYMBOL;
+}
