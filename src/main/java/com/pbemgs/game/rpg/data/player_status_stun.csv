@@ -1,0 +1,3 @@
+ActionApplyActionPreventionSE,targetType,splashCount,chanceToHit,seName,classification,duration,charges,stunChance,condition
+Stun_SpiritWolfPounce,LINKED,0,50,Pounced,PHYSICAL,1,INF,100,
+Stun_ShieldBash,LINKED,0,100,Bashed,PHYSICAL,1,INF,100,T ARMOR < 20

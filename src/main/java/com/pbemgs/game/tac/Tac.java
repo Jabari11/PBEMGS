@@ -18,7 +18,8 @@ import java.util.Map;
 import java.util.Random;
 
 public class Tac implements GameInterface {
-    private record TextBodyParseResult(Integer move, boolean success, String error) {}
+    private record TextBodyParseResult(Integer move, boolean success, String error) {
+    }
 
     private final Duration REMINDER_DURATION = Duration.ofHours(24);
 
@@ -45,8 +46,8 @@ public class Tac implements GameInterface {
     }
 
     /**
-     *  Process a TAC move email.  This will also generate the system response move and send the
-     *  updated state to the user (with a nice description of what to do next).
+     * Process a TAC move email.  This will also generate the system response move and send the
+     * updated state to the user (with a nice description of what to do next).
      */
     @Override
     public void processMove(UsersRecord user, long gameId, S3Email email, SESEmailSender emailSender) {
@@ -86,12 +87,12 @@ public class Tac implements GameInterface {
             game.setGameState(TacGamesGameState.COMPLETE);
             header.append("\n").append(user.getHandle()).append(" has won!");
             footer.append(TacTextResponseProvider.getGameWonText());
-            subject.append("PBEMGS - Tac Game Won!");
+            subject.append("PBEMGS - Tac Game complete - victory!");
         } else if (!board.hasEmptyCells()) {
             game.setGameState(TacGamesGameState.COMPLETE);
             header.append("\n").append(user.getHandle()).append(" - board is full, drawn!");
             footer.append(TacTextResponseProvider.getGameDrawText());
-            subject.append("PBEMGS - Tac Game Drawn!");
+            subject.append("PBEMGS - Tac Game complete - drawn!");
         } else {
             int systemMove = board.getRandomAvailableMove(rng);
             board.makeMove(systemMove, 'O');
@@ -100,7 +101,7 @@ public class Tac implements GameInterface {
                 game.setGameState(TacGamesGameState.COMPLETE);
                 header.append("\nPBEMGS has won!");
                 footer.append(TacTextResponseProvider.getGameLostText());
-                subject.append("PBEMGS - Tac Game Lost!");
+                subject.append("PBEMGS - Tac Game complete - lost!");
             } else {
                 header.append("\nIt is your turn!");
                 footer.append(TacTextResponseProvider.getMoveResponseFooterText());

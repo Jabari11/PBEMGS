@@ -15,7 +15,8 @@ import java.util.Set;
 
 public class AtaxxBoard {
 
-    public record MoveResult(boolean success, String errorMsg) {}
+    public record MoveResult(boolean success, String errorMsg) {
+    }
 
     private static final char EMPTY = '.';
     private static final char OBSTACLE = '#';
@@ -197,9 +198,9 @@ public class AtaxxBoard {
     }
 
     /**
-     *  Get a random move for a timeout - this will pick a random clone move if one is available,
-     *  otherwise a random jump move.
-     *  Pair types used here are from-loc/to-loc.
+     * Get a random move for a timeout - this will pick a random clone move if one is available,
+     * otherwise a random jump move.
+     * Pair types used here are from-loc/to-loc.
      */
     public Pair<Location, Location> generateRandomMove(int playerSlot) {
         List<Pair<Location, Location>> cloneMoves = getValidMovesByRange(playerSlot, 1);
@@ -224,7 +225,7 @@ public class AtaxxBoard {
                             int toRow = row + dr;
                             int toCol = col + dc;
                             if (toRow >= 0 && toRow < size && toCol >= 0 && toCol < size &&
-                                !(dr == 0 && dc == 0) && board[toRow][toCol] == EMPTY) {
+                                    !(dr == 0 && dc == 0) && board[toRow][toCol] == EMPTY) {
 
                                 Location to = new Location(toRow, toCol);
                                 validMoves.add(Pair.of(from, to));
@@ -266,14 +267,18 @@ public class AtaxxBoard {
     // - For "standardized" placement, choose a board configuration from preset lists randomly based on the
     //   size of the board.
 
-    /** Entry point, takes player count and obstacle option */
+    /**
+     * Entry point, takes player count and obstacle option
+     */
     public void createInitialBoard(int numPlayers, AtaxxGamesBoardOption boardOption) {
         logger.log("ATAXX: Creating initial board with options - numPlayers: " + numPlayers + ", boardType: " + boardOption.getName());
         placeStartingPieces(numPlayers);
         placeObstacles(boardOption);
     }
 
-    /** Places the starting pieces for a 2P or 4P game */
+    /**
+     * Places the starting pieces for a 2P or 4P game
+     */
     private void placeStartingPieces(int numPlayers) {
         if (numPlayers == 2) {
             board[0][0] = getPlayerSymbol(0);              // Top-left
@@ -294,7 +299,9 @@ public class AtaxxBoard {
         }
     }
 
-    /** Places obstacles based on the board option */
+    /**
+     * Places obstacles based on the board option
+     */
     private void placeObstacles(AtaxxGamesBoardOption boardOption) {
         if (boardOption == AtaxxGamesBoardOption.BLANK) {
             return; // No obstacles, return early
@@ -308,7 +315,9 @@ public class AtaxxBoard {
         }
     }
 
-    /** Generates symmetrical obstacles randomly.  7/8 size boards get 2..3, 9/10 size boards get 3..5, etc. */
+    /**
+     * Generates symmetrical obstacles randomly.  7/8 size boards get 2..3, 9/10 size boards get 3..5, etc.
+     */
     private void generateRandomObstacles() {
         int quadrantSize = (size + 1) / 2;
         int minObstacles = (size - 3) / 2;
@@ -326,7 +335,9 @@ public class AtaxxBoard {
         }
     }
 
-    /** Mirrors a generated obstacle across all quadrants */
+    /**
+     * Mirrors a generated obstacle across all quadrants
+     */
     private void mirrorObstacle(int r, int c) {
         int mirroredR = size - 1 - r;
         int mirroredC = size - 1 - c;
@@ -336,7 +347,9 @@ public class AtaxxBoard {
         board[mirroredR][mirroredC] = OBSTACLE;
     }
 
-    /** Applies predefined obstacle layouts */
+    /**
+     * Applies predefined obstacle layouts
+     */
     private void applyPresetObstacles() {
         List<List<Location>> presets = getPresetObstacles();
         List<Location> chosenPreset = presets.get(rng.nextInt(presets.size()));
@@ -351,7 +364,7 @@ public class AtaxxBoard {
                 List.of(new Location(1, 1)),
                 List.of(new Location(2, 2)),
                 List.of(new Location(3, 3)),
-                List.of(new Location(3,2), new Location(2, 3)),
+                List.of(new Location(3, 2), new Location(2, 3)),
                 List.of(new Location(3, 0), new Location(3, 2)),
                 List.of(new Location(0, 3), new Location(3, 0)),
                 List.of(new Location(3, 1), new Location(1, 2)),
@@ -388,11 +401,11 @@ public class AtaxxBoard {
             extraPresets.add(List.of(new Location(5, 0), new Location(5, 2)));
             extraPresets.add(List.of(new Location(0, 5), new Location(5, 0), new Location(4, 4)));
             extraPresets.add(List.of(new Location(5, 1), new Location(1, 2), new Location(2, 5), new Location(5, 2)));
-            extraPresets.add(List.of(new Location(0, 2), new Location(2, 0), new Location(4, 5), new Location(5,4)));
+            extraPresets.add(List.of(new Location(0, 2), new Location(2, 0), new Location(4, 5), new Location(5, 4)));
             extraPresets.add(List.of(new Location(0, 5), new Location(5, 0), new Location(5, 5), new Location(3, 3)));
-            extraPresets.add(List.of(new Location(1, 1), new Location(2, 2), new Location(5, 5), new Location (3, 3)));
+            extraPresets.add(List.of(new Location(1, 1), new Location(2, 2), new Location(5, 5), new Location(3, 3)));
             extraPresets.add(List.of(new Location(1, 1), new Location(1, 5), new Location(5, 1), new Location(4, 4)));
-            extraPresets.add(List.of(new Location(3, 3), new Location(5, 5), new Location (4, 4)));
+            extraPresets.add(List.of(new Location(3, 3), new Location(5, 5), new Location(4, 4)));
             extraPresets.add(List.of(new Location(1, 1), new Location(5, 5), new Location(3, 3)));
             extraPresets.add(List.of(new Location(2, 2), new Location(5, 5), new Location(0, 5), new Location(5, 0)));
             extraPresets.add(List.of(new Location(5, 2), new Location(2, 5), new Location(2, 1), new Location(1, 2)));

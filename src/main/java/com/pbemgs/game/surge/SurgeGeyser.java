@@ -22,10 +22,21 @@ public class SurgeGeyser {
             this.displayName = displayName;
         }
 
-        public char getSymbol() { return symbol; }
-        public int getPower() { return power; }
-        public char getDisplaySymbol() { return displaySymbol; }
-        public String getDisplayName() { return displayName; }
+        public char getSymbol() {
+            return symbol;
+        }
+
+        public int getPower() {
+            return power;
+        }
+
+        public char getDisplaySymbol() {
+            return displaySymbol;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
 
         public static GeyserType fromSymbol(char c) {
             for (GeyserType type : values()) {
@@ -47,10 +58,21 @@ public class SurgeGeyser {
         this.type = type;
     }
 
-    public int getRow() { return row; }
-    public int getCol() { return col; }
-    public int getPower() { return type.getPower(); }
-    public GeyserType getType() { return type; }
+    public int getRow() {
+        return row;
+    }
+
+    public int getCol() {
+        return col;
+    }
+
+    public int getPower() {
+        return type.getPower();
+    }
+
+    public GeyserType getType() {
+        return type;
+    }
 
     /**
      * Serializes this geyser to "A12:H" format.

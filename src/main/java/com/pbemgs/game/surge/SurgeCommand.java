@@ -34,7 +34,9 @@ public class SurgeCommand {
         return col;
     }
 
-    public Location getLocation() { return new Location(row, col); }
+    public Location getLocation() {
+        return new Location(row, col);
+    }
 
     public SurgeDirection getDirection() {
         return direction;

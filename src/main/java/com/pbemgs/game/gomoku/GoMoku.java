@@ -5,16 +5,20 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.pbemgs.controller.SESEmailSender;
 import com.pbemgs.dko.GoMokuGameDKO;
+import com.pbemgs.dko.PlayerOutcomesDKO;
 import com.pbemgs.dko.UsersDKO;
 import com.pbemgs.game.GameInterface;
 import com.pbemgs.game.GameMessageMailer;
 import com.pbemgs.generated.enums.GomokuGamesGameState;
 import com.pbemgs.generated.enums.GomokuGamesSwap2State;
+import com.pbemgs.generated.enums.PlayerOutcomesOutcome;
 import com.pbemgs.generated.tables.records.GomokuGamesRecord;
 import com.pbemgs.generated.tables.records.UsersRecord;
+import com.pbemgs.model.GameType;
 import com.pbemgs.model.Location;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -29,24 +33,27 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class GoMoku implements GameInterface {
-
-    private static final String GAME_NAME = "GOMOKU";
     private static final int PLAYER_GAME_LIMIT = 3;
     private static final int MAX_OPEN_GAMES = 8;
     private static final int BOARD_SIZE = 15;  // static for now, maybe add configuration later
     private final Duration REMINDER_DURATION = Duration.ofHours(24);
-    private final Duration TIMEOUT_DURATION = Duration.ofHours(96);
+    private final Duration TIMEOUT_DURATION = Duration.ofHours(72);
 
+    private final DSLContext dslContext;
     private final GoMokuGameDKO goMokuGameDKO;
     private final UsersDKO usersDKO;
     private final LambdaLogger logger;
 
     private final BiMap<UsersRecord, Character> symbolByUser;
 
-    public record GoMokuMove (List<Location> placements, boolean swap, boolean stay) {}
-    private record TextBodyParseResult(GoMokuMove move, boolean success, String error) {}
+    public record GoMokuMove(List<Location> placements, boolean swap, boolean stay) {
+    }
+
+    private record TextBodyParseResult(GoMokuMove move, boolean success, String error) {
+    }
 
     public GoMoku(DSLContext dslContext, LambdaLogger logger) {
+        this.dslContext = dslContext;
         goMokuGameDKO = new GoMokuGameDKO(dslContext);
         usersDKO = new UsersDKO(dslContext);
         this.logger = logger;
@@ -57,42 +64,42 @@ public class GoMoku implements GameInterface {
     public void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender) {
         List<GomokuGamesRecord> userGames = goMokuGameDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GameType.GOMOKU);
             return;
         }
 
         List<GomokuGamesRecord> openGames = goMokuGameDKO.getOpenGames();
         if (openGames.size() >= MAX_OPEN_GAMES) {
-            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GameType.GOMOKU);
             return;
         }
 
         GoMokuBoard newBoard = new GoMokuBoard(BOARD_SIZE, logger);
         Long newGameNum = goMokuGameDKO.createNewGame(user.getUserId(), newBoard.serialize(), BOARD_SIZE);
-        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GAME_NAME, newGameNum);
+        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GameType.GOMOKU, newGameNum);
     }
 
     @Override
     public void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender) {
         List<GomokuGamesRecord> userGames = goMokuGameDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GameType.GOMOKU);
             return;
         }
         GomokuGamesRecord game = goMokuGameDKO.getGameById(gameId);
 
         // Validity checks: game must exist, be in OPEN state, and not have a X-player of self.
         if (game == null || game.getGameState() != GomokuGamesGameState.OPEN) {
-            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
-        if (Objects.equals(game.getXPlayerId(), user.getUserId())) {
-            GameMessageMailer.joinSelf(emailSender, user.getEmailAddr(), GAME_NAME);
+        if (Objects.equals(game.getXUserId(), user.getUserId())) {
+            GameMessageMailer.joinAlreadyIn(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
 
         // Set player symbols randomly
-        UsersRecord createUser = usersDKO.fetchUserById(game.getXPlayerId());
+        UsersRecord createUser = usersDKO.fetchUserById(game.getXUserId());
         Random rng = new Random();
         if (rng.nextBoolean()) {
             goMokuGameDKO.completeGameCreation(gameId, createUser.getUserId(), user.getUserId());
@@ -108,7 +115,7 @@ public class GoMoku implements GameInterface {
 
         sendBoardStateEmail(emailSender, "MOVE GOMOKU " + gameId + " - GAME START!",
                 user.getHandle() + " has joined the action - GAME ON!\n\n",
-                game, gameBoard,null);
+                game, gameBoard, null);
     }
 
     @Override
@@ -117,12 +124,11 @@ public class GoMoku implements GameInterface {
 
         // Validity checks: gameBoard must exist, be in IN_PROGRESS state, and the user must be active player.
         if (game == null || game.getGameState() != GomokuGamesGameState.IN_PROGRESS) {
-            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
-        if (!Objects.equals(game.getPlayerIdToMove(), user.getUserId())) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE GOMOKU failed",
-                    GoMokuTextResponseProvider.getMoveNotActiveText(gameId));
+        if (!Objects.equals(game.getUserIdToMove(), user.getUserId())) {
+            GameMessageMailer.moveNotActiveText(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
 
@@ -131,15 +137,15 @@ public class GoMoku implements GameInterface {
         // Parse email body for the move
         TextBodyParseResult parseResult = parseMoveFromEmail(emailBody);
         if (!parseResult.success()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE GOMOKU failed",
-                    parseResult.error());
+            GameMessageMailer.moveFailedToParse(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId, parseResult.error());
+            return;
         }
+
         GoMokuMove move = parseResult.move();
 
         // Load gameBoard, verify move is valid
         GoMokuBoard gameBoard = new GoMokuBoard(BOARD_SIZE, logger);
         gameBoard.deserialize(game.getBoardState());
-        char playerSymbol = symbolByUser.get(user);
 
         // Check move vs game swap2 state
         String stateError = validateMoveType(move, game.getSwap2State());
@@ -270,10 +276,10 @@ public class GoMoku implements GameInterface {
                 gameBoard.makeMove(GoMokuBoard.PLAYER_O, move.placements().get(0));
                 boardHeader.append(user.getHandle()).append(" has swapped colors to O, and placed one stone at ");
                 boardHeader.append(move.placements().get(0).toString()).append(".\n\n");
-                game.setXPlayerId(symbolByUser.inverse().get(GoMokuBoard.PLAYER_O).getUserId());
-                game.setOPlayerId(symbolByUser.inverse().get(GoMokuBoard.PLAYER_X).getUserId());
+                game.setXUserId(symbolByUser.inverse().get(GoMokuBoard.PLAYER_O).getUserId());
+                game.setOUserId(symbolByUser.inverse().get(GoMokuBoard.PLAYER_X).getUserId());
                 oppSymbol = GoMokuBoard.PLAYER_X;
-                game.setPlayerIdToMove(game.getOPlayerId());  // O just moved, post-process with flip back.
+                game.setUserIdToMove(game.getOUserId());  // O just moved, post-process with flip back.
                 game.setSwap2State(GomokuGamesSwap2State.GAMEPLAY);
                 populatePlayerMap(game);  // repopulate after player swap
                 break;
@@ -283,7 +289,7 @@ public class GoMoku implements GameInterface {
 
         // Activate opposing player
         UsersRecord oppUser = symbolByUser.inverse().get(oppSymbol);
-        game.setPlayerIdToMove(oppUser.getUserId());
+        game.setUserIdToMove(oppUser.getUserId());
         game.setLastMoveTimestamp(LocalDateTime.now());
         game.setLastReminderTimestamp(null);
 
@@ -292,16 +298,16 @@ public class GoMoku implements GameInterface {
 
         // Send emails out
         sendBoardStateEmail(emailSender, "MOVE GOMOKU " + game.getGameId(),
-                 boardHeader.toString(), game, gameBoard, null);
+                boardHeader.toString(), game, gameBoard, null);
     }
 
     // Process SWAP2 player swap - this is on TSP (tentative O)'s first turn
     private void processPlayerSwap(GomokuGamesRecord game, GoMokuBoard gameBoard, SESEmailSender emailSender) {
         UsersRecord TFP = symbolByUser.inverse().get(GoMokuBoard.PLAYER_X);
         UsersRecord TSP = symbolByUser.inverse().get(GoMokuBoard.PLAYER_O);
-        game.setXPlayerId(TSP.getUserId());
-        game.setOPlayerId(TFP.getUserId());
-        game.setPlayerIdToMove(TFP.getUserId());
+        game.setXUserId(TSP.getUserId());
+        game.setOUserId(TFP.getUserId());
+        game.setUserIdToMove(TFP.getUserId());
         game.setSwap2State(GomokuGamesSwap2State.GAMEPLAY);
         game.setLastMoveTimestamp(LocalDateTime.now());
         game.setLastReminderTimestamp(null);
@@ -316,7 +322,7 @@ public class GoMoku implements GameInterface {
     private void processPlayerKeepTFP(GomokuGamesRecord game, GoMokuBoard gameBoard, SESEmailSender emailSender) {
         UsersRecord TFP = symbolByUser.inverse().get(GoMokuBoard.PLAYER_X);
         UsersRecord TSP = symbolByUser.inverse().get(GoMokuBoard.PLAYER_O);
-        game.setPlayerIdToMove(TSP.getUserId());
+        game.setUserIdToMove(TSP.getUserId());
         game.setSwap2State(GomokuGamesSwap2State.GAMEPLAY);
         game.setLastMoveTimestamp(LocalDateTime.now());
         game.setLastReminderTimestamp(null);
@@ -332,12 +338,12 @@ public class GoMoku implements GameInterface {
         if (openGames.isEmpty()) {
             return GoMokuTextResponseProvider.getNoOpenGamesText();
         }
-        Set<Long> creatorUserIds = openGames.stream().map(GomokuGamesRecord::getXPlayerId).collect(Collectors.toSet());
+        Set<Long> creatorUserIds = openGames.stream().map(GomokuGamesRecord::getXUserId).collect(Collectors.toSet());
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(creatorUserIds);
         StringBuilder sb = new StringBuilder();
         sb.append(GoMokuTextResponseProvider.getOpenGamesHeaderText(openGames.size()));
         for (GomokuGamesRecord game : openGames) {
-            sb.append(GoMokuTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXPlayerId())));
+            sb.append(GoMokuTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXUserId())));
         }
         return sb.toString();
     }
@@ -358,7 +364,7 @@ public class GoMoku implements GameInterface {
                 sb.append(" is waiting for an opponent.\n");
             } else {
                 sb.append(" is in progress - ");
-                sb.append(game.getPlayerIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
+                sb.append(game.getUserIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
             }
         }
         return sb.toString();
@@ -368,13 +374,11 @@ public class GoMoku implements GameInterface {
     public void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender) {
         GomokuGamesRecord game = goMokuGameDKO.getGameById(gameId);
         if (game == null || game.getGameState() == GomokuGamesGameState.OPEN) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    GoMokuTextResponseProvider.getStatusFailedNoGameText(gameId));
+            GameMessageMailer.statusNotValidGame(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
-        if (user.getUserId() != game.getXPlayerId() && user.getUserId() != game.getOPlayerId()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    GoMokuTextResponseProvider.getStatusFailedNotYourGameText(gameId));
+        if (user.getUserId() != game.getXUserId() && user.getUserId() != game.getOUserId()) {
+            GameMessageMailer.statusNotYourGame(emailSender, user.getEmailAddr(), GameType.GOMOKU, gameId);
             return;
         }
 
@@ -402,10 +406,10 @@ public class GoMoku implements GameInterface {
 
             // TODO: random action if not in GAMEPLAY?  Or just spam reminders?
             if (Duration.between(lastMoveTime, currTime).compareTo(TIMEOUT_DURATION) > 0 &&
-                game.getSwap2State() == GomokuGamesSwap2State.GAMEPLAY) {
+                    game.getSwap2State() == GomokuGamesSwap2State.GAMEPLAY) {
                 try {
                     populatePlayerMap(game);
-                    UsersRecord user = usersDKO.fetchUserById(game.getPlayerIdToMove());
+                    UsersRecord user = usersDKO.fetchUserById(game.getUserIdToMove());
                     GoMokuBoard gameBoard = new GoMokuBoard(BOARD_SIZE, logger);
                     gameBoard.deserialize(game.getBoardState());
                     GoMokuMove randomMove = new GoMokuMove(List.of(gameBoard.getRandomMove()), false, false);
@@ -419,7 +423,7 @@ public class GoMoku implements GameInterface {
                 LocalDateTime lastTime = game.getLastReminderTimestamp() == null ?
                         game.getLastMoveTimestamp() : game.getLastReminderTimestamp();
                 if (Duration.between(lastTime, currTime).compareTo(REMINDER_DURATION) > 0) {
-                    staleStringByUserId.put(game.getPlayerIdToMove(), "GoMoku: Game ID " + game.getGameId());
+                    staleStringByUserId.put(game.getUserIdToMove(), "GoMoku: Game ID " + game.getGameId());
                 }
             }
         }
@@ -435,13 +439,12 @@ public class GoMoku implements GameInterface {
         return staleStringByUserId;
     }
 
-
     private void processGameOver(Character winnerMarker, GomokuGamesRecord game, GoMokuBoard gameBoard,
                                  SESEmailSender emailSender, String boardHeader, Long newActiveUserId) {
         game.setGameState(GomokuGamesGameState.COMPLETE);
 
         // Activate opposing player (header display only)
-        game.setPlayerIdToMove(newActiveUserId);
+        game.setUserIdToMove(newActiveUserId);
         game.setLastMoveTimestamp(LocalDateTime.now());
         game.setLastReminderTimestamp(null);
 
@@ -449,16 +452,31 @@ public class GoMoku implements GameInterface {
         subject.append(" has ended.  ");
         if (winnerMarker != null) {
             UsersRecord winPlayer = symbolByUser.inverse().get(winnerMarker);
-            game.setVictorPlayerId(winPlayer.getUserId());
             subject.append("Winner is ").append(winPlayer.getHandle()).append("!");
         } else {
-            game.setVictorPlayerId(null);
             subject.append("Game is Drawn!");
         }
 
         // Store to DB and send final email.
-        goMokuGameDKO.updateGame(game);
-        sendBoardStateEmail(emailSender, subject.toString(), boardHeader + "\nFinal Board:\n\n", game, gameBoard, null);
+        try {
+            dslContext.transaction(configuration -> {
+                DSLContext trx = DSL.using(configuration);
+                GoMokuGameDKO txGomokuDKO = new GoMokuGameDKO(trx);
+                PlayerOutcomesDKO txOutcomesDKO = new PlayerOutcomesDKO(trx);
+                for (UsersRecord user : symbolByUser.keySet()) {
+                    PlayerOutcomesOutcome outcome = (winnerMarker == null ? PlayerOutcomesOutcome.DRAW :
+                            (winnerMarker == symbolByUser.get(user) ? PlayerOutcomesOutcome.WIN : PlayerOutcomesOutcome.LOSS));
+                    txOutcomesDKO.insertOutcome(GameType.GOMOKU, game.getGameId(), user.getUserId(),
+                            outcome, null, null);
+                }
+                txGomokuDKO.updateGame(game);
+            });
+
+            sendBoardStateEmail(emailSender, subject.toString(), boardHeader + "\nFinal Board:\n\n", game, gameBoard, null);
+        } catch (Exception e) {
+            logger.log("Exception while processing end of GoMoku game: " + e.getMessage());
+            throw e;
+        }
     }
 
     // email body retrieval and parsing
@@ -508,8 +526,8 @@ public class GoMoku implements GameInterface {
 
     private void populatePlayerMap(GomokuGamesRecord game) {
         symbolByUser.clear();
-        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXPlayerId());
-        UsersRecord oPlayer = usersDKO.fetchUserById(game.getOPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXUserId());
+        UsersRecord oPlayer = usersDKO.fetchUserById(game.getOUserId());
         symbolByUser.put(xPlayer, GoMokuBoard.PLAYER_X);
         symbolByUser.put(oPlayer, GoMokuBoard.PLAYER_O);
     }
@@ -529,8 +547,8 @@ public class GoMoku implements GameInterface {
                                      GomokuGamesRecord game, GoMokuBoard gameBoard, Long toUserId) {
         UsersRecord xPlayer = symbolByUser.inverse().get(GoMokuBoard.PLAYER_X);
         UsersRecord oPlayer = symbolByUser.inverse().get(GoMokuBoard.PLAYER_O);
-        String xGameHeader = getXHeaderText(game, xPlayer, oPlayer, game.getPlayerIdToMove());
-        String oGameHeader = getOHeaderText(game, xPlayer, oPlayer, game.getPlayerIdToMove());
+        String xGameHeader = getXHeaderText(game, xPlayer, oPlayer, game.getUserIdToMove());
+        String oGameHeader = getOHeaderText(game, xPlayer, oPlayer, game.getUserIdToMove());
 
         String stateHeader = GoMokuTextResponseProvider.getSwap2StateHeader(game.getSwap2State());
 

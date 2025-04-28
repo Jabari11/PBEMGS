@@ -22,10 +22,11 @@ public class S3Email {
 
     // Status types for spam and virus tests
     public enum StatusType {PASS, FAIL, GRAY, PROCESSING_FAILED}
+
     private final static String EXPECTED_SOURCE = "aws:ses";
     private final static String EXPECTED_VERSION = "1.0";
     private final static String EXPECTED_TO_ADDR = "pbemgs@angryturtlestudios.com";
-    
+
     private final String from;
     private final String subject;
     private final String messageId;
@@ -155,7 +156,7 @@ public class S3Email {
         if (content instanceof String) {
             String fullContent = (String) content;
             logger.log("Raw pure string content:\n" + fullContent);
-            return fullContent.replace("\r","").trim();
+            return fullContent.replace("\r", "").trim();
         } else if (content instanceof Multipart) {
             Multipart multipart = (Multipart) content;
             for (int i = 0; i < multipart.getCount(); i++) {

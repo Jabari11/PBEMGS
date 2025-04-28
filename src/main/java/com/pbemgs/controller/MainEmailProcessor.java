@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * Initial email processor for handling an email sent to the PBEMGS.
- *
+ * <p>
  * This handles parsing the subject line, the user lookup, and pushing the command to the appropriate handler.
  */
 public class MainEmailProcessor {
@@ -22,7 +22,9 @@ public class MainEmailProcessor {
     private final DSLContext dslContext;
     private final UsersDKO usersDKO;
 
-    public record SubjectLineCommand(boolean parseSuccess, String message, Command command, GameType game, Long gameId) {}
+    public record SubjectLineCommand(boolean parseSuccess, String message, Command command, GameType game,
+                                     Long gameId) {
+    }
 
     public MainEmailProcessor(DSLContext dslContext) {
         this.dslContext = dslContext;
@@ -116,6 +118,8 @@ public class MainEmailProcessor {
                 case "surge" -> GameType.SURGE;
                 case "loa" -> GameType.LOA;
                 case "gomoku" -> GameType.GOMOKU;
+                case "triad" -> GameType.TRIAD;
+                case "ironclad" -> GameType.IRONCLAD;
                 default -> null;
             };
             if (gameType == null) {
@@ -142,14 +146,14 @@ public class MainEmailProcessor {
             Command.CHECK_HANDLE, Command.CREATE_ACCOUNT, Command.GAME_LIST, Command.RULES,
             Command.NOTIFICATION_RETURN);
     private static final Map<UsersUserType, List<Command>> commandValidity =
-    Map.of(
-            UsersUserType.BASIC, List.of(Command.INTRO, Command.HELP_BASE, Command.GAME_LIST, Command.RULES, Command.FEEDBACK,
-                    Command.CREATE_GAME, Command.JOIN_GAME, Command.OPEN_GAMES, Command.MY_GAMES,
-                    Command.GAME_STATUS, Command.MOVE, Command.TEST_DISPLAY, Command.TEST_SYMBOL, Command.ACTIVATE, Command.DEACTIVATE),
-            UsersUserType.SUPERUSER, List.of(),  // TBD, not using this tier at the moment
-            UsersUserType.OWNER, List.of(Command.INTRO, Command.HELP_BASE, Command.TEST_DISPLAY, Command.GAME_LIST, Command.RULES,
-                    Command.CREATE_GAME, Command.JOIN_GAME, Command.OPEN_GAMES, Command.MY_GAMES,
-                    Command.GAME_STATUS, Command.MOVE, Command.GLOBAL_NOTIFICATION, Command.LIST_NEW_USERS, Command.TEST_SYMBOL)
+            Map.of(
+                    UsersUserType.BASIC, List.of(Command.INTRO, Command.HELP_BASE, Command.GAME_LIST, Command.RULES, Command.FEEDBACK,
+                            Command.CREATE_GAME, Command.JOIN_GAME, Command.OPEN_GAMES, Command.MY_GAMES,
+                            Command.GAME_STATUS, Command.MOVE, Command.TEST_DISPLAY, Command.TEST_SYMBOL, Command.ACTIVATE, Command.DEACTIVATE),
+                    UsersUserType.SUPERUSER, List.of(),  // TBD, not using this tier at the moment
+                    UsersUserType.OWNER, List.of(Command.INTRO, Command.HELP_BASE, Command.TEST_DISPLAY, Command.GAME_LIST, Command.RULES,
+                            Command.CREATE_GAME, Command.JOIN_GAME, Command.OPEN_GAMES, Command.MY_GAMES,
+                            Command.GAME_STATUS, Command.MOVE, Command.GLOBAL_NOTIFICATION, Command.LIST_NEW_USERS, Command.TEST_SYMBOL)
             );
 
     private boolean validateCommand(UsersRecord user, SubjectLineCommand command) {

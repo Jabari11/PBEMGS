@@ -61,35 +61,38 @@ public class TextResponseProvider {
     }
 
     public static String getIntroText() {
-        return "Welcome to PBEMGS by Angry Turtle Studios—Your Portal to Epic Async Strategy!\n" +
-                "Step into a world of turn-based brilliance, playable entirely by email. No apps, no rush—just pure strategy at *your* pace.\n\n" +
+        return "Welcome to the PBEMGS by Angry Turtle Studios — Async Games for Tactical Turtles!\n" +
+                "Turn-based strategy delivered by email. No installs. No timers. No mercy (well, maybe a little...)\n\n" +
                 "Why PBEMGS?\n" +
-                " - Play Anytime: Minutes or hours to think? Move when you’re ready — think classic correspondence chess with a modern twist.\n" +
-                " - Unique Games: From the liquid chaos of Surge to the mind-bending Ninetac (nine tic-tac-toe boards at once!), our growing library mixes originals and rare classics.\n" +
-                " - No Pressure: Async means no schedules — just check your inbox and strike!\n\n" +
-                "What’s on Offer?\n" +
-                "  Five games and counting!  Classics like Ataxx and GoMoku, originals like Ninetac and Surge (an async RTS!), and more brewing. Peek the lineup with 'game_preview'!\n\n" +
+                " - Play on YOUR time: Think for minutes or days between moves - think correspondence chess with a modern twist and variety of games.\n" +
+                " - Strategic Variety: From the mind-bending movements of Lines of Action, to nine tic-tac-toe boards at once,\n" +
+                "   to capturing cards in Triad Cubed, to the real-time liquid chaos of Surge - our lineup blends originals with underappreciated classics.\n\n" +
+                " - Inbox-Only: No apps, no logins - only an initial signup. Moves in, updates out - all via email.\n\n" +
+                "What’s in the Library?\n" +
+                "  Six games (and counting):\n" +
+                "  - Classics like Ataxx, GoMoku, and Lines of Action\n" +
+                "  - Originals like Surge (an async RTS!) and competitive twists like Ninetac and Triad Cubed\n" +
+                "  - A lot more brewing!\n" +
+                "  Check them out with 'game_preview'!\n\n" +
                 "How It Works:\n" +
                 "  1. Sign up: Email 'create_account yourhandle' to pbemgs@angryturtlestudios.com.\n" +
-                "  2. Pick a fight: 'create_game surge' or 'join_game ninetac 123'.\n" +
-                "  3. Move: Reply to turn emails — e.g., 'move surge 123' with 'open A1E' in the body.\n" +
-                "  Updates hit your inbox from pbemgs@mail.angryturtlestudios.com — simple!\n\n" +
-                "Real-Time? Nah.\n" +
-                "  This is async gaming — play when life lets you. Some games (like Surge) tick at set times (twice daily!), adding a pseudo-real-time edge.\n\n" +
-                "Getting In:\n" +
-                " - Scout: 'open_games surge' for waiting matches.\n" +
-                " - Join: 'join_game [GameType] [GameId]'.\n" +
-                " - Create: 'create_game [GameType]'—check 'rules [GameType]' for options.\n" +
-                "  Play multiple games of each type, or just one at a time!\n\n" +
+                "  2. Find a match: 'open_games' or filter by type 'open_games ninetac'\n" +
+                "  3. Join or create: 'join_game [GameType] [ID]' or 'create_game [GameType]'.\n" +
+                "  4. Make moves: Reply to game emails with commands like 'a2-a4' or 'orc b2'.\n" +
+                "About That Whole 'Async' Thing:\n" +
+                "  Play when life lets you - most games wait for your turn.  Surge ticks at set times daily, like a slow, strategy heartbeat.\n" +
+                "  Reminders go out after 24h.  If you vanish for 3 days (typically), the server moves for you - randomly and without shame.\n\n" +
                 "Making Moves:\n" +
-                "  Game email lands? Reply with 'move ninetac 105' and '15' in the body — or just the move if the subject’s set. 'rules [GameType]' has formats.\n\n" +
-                "Tech Needs?\n" +
-                "  Just an email client with fixed-width text (for boards). Some games glow with Unicode or HTML color—test yours with 'test_display'.\n\n" +
-                "Commands?\n" +
-                "  Reply 'help' for the full list — unlocks more post-signup!\n\n" +
+                "  Your game emails come from pbemgs@mail.angryturtlestudios.com — reply with your move in the body.\n\n" +
+                "  Formats vary by game.  Use 'rules [GameType]' if you're unsure.\n\n" +
+                "System Requirements:\n" +
+                "  Any email client with fixed-width display.  Some games glow with Unicode or HTML color — test yours with 'test_display'.\n\n" +
+                "Need Help?\n" +
+                "  Email a command of 'help' for the full command list - more commands unlock after signup.\n\n" +
+                "  Have ideas or found a bug?  'feedback' is your friend.\n\n" +
                 "Cost?\n" +
-                "  Free! We run on passion (and a few bucks for servers). Loving it? Toss us a donation via 'feedback' details.\n\n" +
-                "Dive into PBEMGS—where strategy meets your schedule. Got ideas? Hit us with 'feedback'. Let’s play!";
+                "  100% free.  No ads, no nonsense.  Just good games.  Donations welcome - send 'feedback' for details.\n\n" +
+                "PBEMGS - Strategy without schedule pressure. Take your turn, sharpen your mind, and conquer ... eventually!";
     }
 
     public static String getGamePreview() {
@@ -99,17 +102,19 @@ public class TextResponseProvider {
                 "- ataxx: A fast-paced battle of expansion and control for 2 or 4 players!\n" +
                 "- surge: A real-time strategy battle of liquid force and momentum — flood your enemies away! (HTML email required.)\n" +
                 "- loa: Lines of Action – Connect your pieces with clever, dynamic movement before your opponent does!\n" +
-                "- gomoku: The timeless 5-in-a-row connection game — simple to learn, hard to master!\n\n" +
-                "In Development:\n" +
-                "- skirmish: Skirmish for Earth – Conquer the planet, one bidding round at a time!\n" +
-                "- <name TBD>: A PvE Fantasy RPG Deckbuilder. Mix and match classes, evolve your deck, and survive the depths!\n\n" +
+                "- gomoku: The timeless 5-in-a-row connection game — simple to learn, hard to master!\n" +
+                "- triad: Triad Cubed - A strategic best-of-three twist on the classic FF8 card placement game! (HTML email required.)\n\n" +
+                "- ironclad: ironclad: Robots with lasers. Go stones with ambition. Two games on one board - and one win condition will end it all.\n" +
                 "Tutorial:\n" +
                 "- tac: A guided tutorial game for new players.\n\n" +
+                "In Development:\n" +
+                "- skirmish: Skirmish for Earth – Conquer the planet, one bidding round at a time!\n" +
+                "- <name TBD>: A PvE Fantasy RPG Deckbuilder. Mix and match classes, evolve your deck, and survive the dungeons!\n\n" +
                 "Send 'rules [GameType]' for detailed rules on any game!\n\n\n" +
                 "In the Backlog (future ideas):\n" +
                 "- Quantis: An original Archon-like battle, using atomic particles to shape the map and blow away the opponent.\n" +
                 "- <name TBD>: A 4X space adventure of development and conquest, inspired by Master of Orion 2 among others.\n" +
-                "- Async MOBA: A multiplayer battle where your choices shape the battlefield – one email at a time!";
+                "- <name TBD>: An async MOBA where your choices shape the battlefield – by email!";
     }
 
     public static String invalidCommandBody(String commandReceived) {
@@ -157,8 +162,8 @@ public class TextResponseProvider {
                 "create_game [GameType]\n\n" +
                 "Use the 'game_preview' command to get a list of games in the\n" +
                 "system with their associated GameType identifiers!\n\n" +
-                "Use the 'rules <GameType>' command to get the required game\n" +
-                "creation options.";
+                "Use the 'rules [GameType]' command to get the required game\n" +
+                "creation options to put into the email body.";
     }
 
     public static String getExceptionTextBody(String command, String e) {
@@ -172,19 +177,10 @@ public class TextResponseProvider {
                 "Thank you for understanding.";
     }
 
-    public static String getOpenGamesMissingGameErrorTextBody() {
-        return "The 'open_games' command requires a game name in the subject line.\n" +
-                "open_games [GameType]\n\n" +
-                "Use the 'game_preview' command to get a list of games in the\n" +
-                "system with their associated GameType identifiers!\n\n";
-    }
-
     public static String getJoinGameBadSubjectFormatTextBody() {
         return "The 'join_game' command requires a game name and game ID in the subject line.\n" +
                 "join_game [GameType] [GameId]\n\n" +
-                "Use the 'game_preview' command to get a list of games in the\n" +
-                "system with their associated GameType identifiers,\n" +
-                "and 'open_games [GameType]' to get the game IDs of open games!";
+                "Use the 'open_games' command to get the game IDs of open games!";
     }
 
     public static String getMoveBadSubjectFormatTextBody() {
@@ -202,17 +198,17 @@ public class TextResponseProvider {
 
     static String alignmentTest =
             "+-----+-----+-----+\n" +
-            "|     |     |     |\n" +
-            "+-----+-----+-----+\n" +
-            "|     |     |     |\n" +
-            "+-----+-----+-----+\n";
+                    "|     |     |     |\n" +
+                    "+-----+-----+-----+\n" +
+                    "|     |     |     |\n" +
+                    "+-----+-----+-----+\n";
 
     static String colorTest =
             "<span style='color:red;'>RED X</span> " +
-            "<span style='color:blue;'>BLUE O</span> " +
-            "<span style='color:green;'>GREEN #</span> " +
-            "<span style='color:purple;'>PURPLE @</span> " +
-            "<span style='color:orange;'>ORANGE =</span> " + "\n";
+                    "<span style='color:blue;'>BLUE O</span> " +
+                    "<span style='color:green;'>GREEN #</span> " +
+                    "<span style='color:purple;'>PURPLE @</span> " +
+                    "<span style='color:orange;'>ORANGE =</span> " + "\n";
 
     static String charTest =
             "Notation 1: " + '\u2605' + " " + '\u25CF' + " " + '\u2B1B' + "\n" +
@@ -221,10 +217,10 @@ public class TextResponseProvider {
 
     static String unicodeAlignmentTest =
             "+-----+-----+-----+\n" +
-            "|  " + '\u25A0' + "  |  "  + '\u25A1' + "  |  "  + '\u25CF' + "  |\n" +
-            "+-----+-----+-----+\n" +
-            "|  " + '\u25CB' + "  |  "  + '\u25BC' + "  |  "  + '\u25AB' + "  |\n" +
-            "+-----+-----+-----+\n";
+                    "|  " + '\u25A0' + "  |  " + '\u25A1' + "  |  " + '\u25CF' + "  |\n" +
+                    "+-----+-----+-----+\n" +
+                    "|  " + '\u25CB' + "  |  " + '\u25BC' + "  |  " + '\u25AB' + "  |\n" +
+                    "+-----+-----+-----+\n";
 
     public static String getTestDisplayHtmlTextBody() {
         return "Email Client Display Test:\n\n" +
@@ -286,7 +282,7 @@ public class TextResponseProvider {
                     MonoSymbol.GRID_VERTICAL.getSymbol(), symbol3, MonoSymbol.GRID_VERTICAL.getSymbol()));
             sb.append(String.format("\t( %-11s , %-11s , %-11s )\n", name1, name2, name3));
             sb.append(fullDivider).append("\n");
-       }
+        }
 
         sb.append("\nIf the grid appears misaligned, certain symbols may not be monospace-safe.");
 

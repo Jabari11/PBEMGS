@@ -13,12 +13,17 @@ import java.util.Map;
 public interface GameInterface {
 
     void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender);
+
     void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender);
+
     void processMove(UsersRecord user, long gameId, S3Email emailBody, SESEmailSender emailSender);
+
     void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender);
 
     String getOpenGamesTextBody();  // get the text response to an "open_games" command
+
     String getRulesTextBody();      // get the text response to a "rules" command
+
     String getMyGamesTextBody(long userId);  // get the text response to a "my_games" command
 
     default void processPeriodicUpdate(SESEmailSender emailSender) {

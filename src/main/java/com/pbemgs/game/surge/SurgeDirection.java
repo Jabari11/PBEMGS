@@ -26,6 +26,7 @@ public enum SurgeDirection {
         EAST.opposite = WEST;
         WEST.opposite = EAST;
     }
+
     public char toChar() {
         return symbol;
     }

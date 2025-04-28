@@ -1,0 +1,3 @@
+ActionDispel,targetType,splashCount,chanceToHit,clearsBeneficial,count,classes,condition
+Clear_all_friendly_debuffs,ALL_ALLIES,0,100,F,INF,MAGIC,
+ChaseDispel_1Magic,REACTION,0,100,T,1,MAGIC,

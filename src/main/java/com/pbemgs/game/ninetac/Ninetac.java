@@ -3,15 +3,19 @@ package com.pbemgs.game.ninetac;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.controller.SESEmailSender;
 import com.pbemgs.dko.NinetacGameDKO;
+import com.pbemgs.dko.PlayerOutcomesDKO;
 import com.pbemgs.dko.UsersDKO;
 import com.pbemgs.game.GameInterface;
 import com.pbemgs.game.GameMessageMailer;
 import com.pbemgs.generated.enums.NinetacGamesBoardOption;
 import com.pbemgs.generated.enums.NinetacGamesGameState;
+import com.pbemgs.generated.enums.PlayerOutcomesOutcome;
 import com.pbemgs.generated.tables.records.NinetacGamesRecord;
 import com.pbemgs.generated.tables.records.UsersRecord;
+import com.pbemgs.model.GameType;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -24,21 +28,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Ninetac implements GameInterface {
-
-    private static final String GAME_NAME = "Ninetac";
     private static final int PLAYER_GAME_LIMIT = 3;
     private static final int MAX_OPEN_GAMES = 10;
     private final Duration REMINDER_DURATION = Duration.ofHours(24);
     private final Duration TIMEOUT_DURATION = Duration.ofHours(72);
 
-
+    private final DSLContext dslContext;
     private final NinetacGameDKO ninetacDKO;
     private final UsersDKO usersDKO;
     private final LambdaLogger logger;
 
-    private record TextBodyParseResult(Integer move, boolean success, String error) {}
+    private record TextBodyParseResult(Integer move, boolean success, String error) {
+    }
 
     public Ninetac(DSLContext dslContext, LambdaLogger logger) {
+        this.dslContext = dslContext;
         ninetacDKO = new NinetacGameDKO(dslContext);
         usersDKO = new UsersDKO(dslContext);
         this.logger = logger;
@@ -48,42 +52,42 @@ public class Ninetac implements GameInterface {
     public void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender) {
         List<NinetacGamesRecord> userGames = ninetacDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GameType.NINETAC);
             return;
         }
 
         List<NinetacGamesRecord> openGames = ninetacDKO.getOpenGames();
         if (openGames.size() >= MAX_OPEN_GAMES) {
-            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GameType.NINETAC);
             return;
         }
 
         NinetacBoard newBoard = new NinetacBoard(logger);
         newBoard.createRandomizedBoard27();
         Long newGameNum = ninetacDKO.createNewGame(user.getUserId(), newBoard.serialize(), NinetacGamesBoardOption.DEFAULT_27);
-        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GAME_NAME, newGameNum);
+        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GameType.NINETAC, newGameNum);
     }
 
     @Override
     public void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender) {
         List<NinetacGamesRecord> userGames = ninetacDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GameType.NINETAC);
             return;
         }
         NinetacGamesRecord requestGame = ninetacDKO.getGameById(gameId);
 
         // Validity checks: game must exist, be in OPEN state, and not have a X-player of self.
         if (requestGame == null || requestGame.getGameState() != NinetacGamesGameState.OPEN) {
-            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
             return;
         }
-        if (Objects.equals(requestGame.getXPlayerId(), user.getUserId())) {
-            GameMessageMailer.joinSelf(emailSender, user.getEmailAddr(), GAME_NAME);
+        if (Objects.equals(requestGame.getXUserId(), user.getUserId())) {
+            GameMessageMailer.joinAlreadyIn(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
             return;
         }
 
-        UsersRecord xPlayer = usersDKO.fetchUserById(requestGame.getXPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(requestGame.getXUserId());
 
         // get player id to move first
         Random rng = new Random();
@@ -103,21 +107,19 @@ public class Ninetac implements GameInterface {
 
         // Validity checks: game must exist, be in IN_PROGRESS state, and the user must be active player.
         if (requestGame == null || requestGame.getGameState() != NinetacGamesGameState.IN_PROGRESS) {
-            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
             return;
         }
-        if (!Objects.equals(requestGame.getPlayerIdToMove(), user.getUserId())) {
-
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE NINETAC failed",
-                    NinetacTextResponseProvider.getMoveNotActiveText(gameId));
+        if (!Objects.equals(requestGame.getUserIdToMove(), user.getUserId())) {
+            GameMessageMailer.moveNotActiveText(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
             return;
         }
 
         // Parse email body for the move (a single number), validate between 1 and 27.
         TextBodyParseResult parseResult = parseMoveFromEmail(emailBody);
         if (!parseResult.success()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE NINETAC failed",
-                    parseResult.error());
+            GameMessageMailer.moveFailedToParse(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId, parseResult.error());
+            return;
         }
 
         int move = parseResult.move();
@@ -136,24 +138,24 @@ public class Ninetac implements GameInterface {
             return;
         }
 
-
         executeMove(user, gameId, emailSender, requestGame, game, move);
     }
 
     // Helper to fully execute a validated move
     private void executeMove(UsersRecord user, long gameId, SESEmailSender emailSender, NinetacGamesRecord requestGame, NinetacBoard game, int move) {
         // Make move.
-        int playerSymbol = user.getUserId().equals(requestGame.getXPlayerId()) ? NinetacBoard.PLAYER_X : NinetacBoard.PLAYER_O;
+        int playerSymbol = user.getUserId().equals(requestGame.getXUserId()) ? NinetacBoard.PLAYER_X : NinetacBoard.PLAYER_O;
         game.makeMove(playerSymbol, move);
         requestGame.setBoardState(game.serialize());
 
         // Swap active player
-        Long oppUserId = (playerSymbol == NinetacBoard.PLAYER_X) ? requestGame.getOPlayerId() : requestGame.getXPlayerId();
+        Long oppUserId = (playerSymbol == NinetacBoard.PLAYER_X) ? requestGame.getOUserId() : requestGame.getXUserId();
         UsersRecord oppUser = usersDKO.fetchUserById(oppUserId);
-        requestGame.setPlayerIdToMove(oppUserId);
+        requestGame.setUserIdToMove(oppUserId);
         requestGame.setLastMoveTimestamp(LocalDateTime.now());
+        requestGame.setLastReminderTimestamp(null);
 
-        // Check end state - immediate victory (boards >= 5), no more numbers (condition (boards >= 5) - if so, end the game.
+        // Check end state - immediate victory (boards >= 5) - if so, end the game.
         if (game.getClaimedCount(playerSymbol) >= 5) {
             processGameOver(playerSymbol, requestGame, game, emailSender);
             return;
@@ -168,14 +170,12 @@ public class Ninetac implements GameInterface {
             } else if (oCount > xCount) {
                 processGameOver(NinetacBoard.PLAYER_O, requestGame, game, emailSender);
             } else {
-                // drawn
-                processGameOver(0, requestGame, game, emailSender);
+                processGameOver(0, requestGame, game, emailSender);  // drawn
             }
             return;
         }
 
         // update game state in DB
-        requestGame.setLastReminderTimestamp(null);
         ninetacDKO.updateGame(requestGame);
 
         // Send emails out (2)
@@ -194,12 +194,12 @@ public class Ninetac implements GameInterface {
         if (openGames.isEmpty()) {
             return NinetacTextResponseProvider.getNoOpenGamesText();
         }
-        Set<Long> creatorUserIds = openGames.stream().map(NinetacGamesRecord::getXPlayerId).collect(Collectors.toSet());
+        Set<Long> creatorUserIds = openGames.stream().map(NinetacGamesRecord::getXUserId).collect(Collectors.toSet());
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(creatorUserIds);
         StringBuilder sb = new StringBuilder();
         sb.append(NinetacTextResponseProvider.getOpenGamesHeaderText(openGames.size()));
         for (NinetacGamesRecord game : openGames) {
-            sb.append(NinetacTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXPlayerId())));
+            sb.append(NinetacTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXUserId())));
         }
         return sb.toString();
     }
@@ -220,7 +220,7 @@ public class Ninetac implements GameInterface {
                 sb.append(" is waiting for an opponent.\n");
             } else {
                 sb.append(" is in progress - ");
-                sb.append(game.getPlayerIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
+                sb.append(game.getUserIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
             }
         }
         return sb.toString();
@@ -229,27 +229,23 @@ public class Ninetac implements GameInterface {
     @Override
     public void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender) {
         NinetacGamesRecord reqGame = ninetacDKO.getGameById(gameId);
-        if (reqGame == null || reqGame.getGameState() == NinetacGamesGameState.OPEN ||
-                reqGame.getGameState() == NinetacGamesGameState.ABANDONED) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    NinetacTextResponseProvider.getStatusFailedNoGameText(gameId));
+        if (reqGame == null || reqGame.getGameState() == NinetacGamesGameState.OPEN) {
+            GameMessageMailer.statusNotValidGame(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
             return;
         }
-        if (user.getUserId() != reqGame.getXPlayerId() && user.getUserId() != reqGame.getOPlayerId()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    NinetacTextResponseProvider.getStatusFailedNotYourGameText(gameId));
-            return;
+        if (user.getUserId() != reqGame.getXUserId() && user.getUserId() != reqGame.getOUserId()) {
+            GameMessageMailer.statusNotYourGame(emailSender, user.getEmailAddr(), GameType.NINETAC, gameId);
         }
 
-        UsersRecord xPlayer = usersDKO.fetchUserById(reqGame.getXPlayerId());
-        UsersRecord oPlayer = usersDKO.fetchUserById(reqGame.getOPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(reqGame.getXUserId());
+        UsersRecord oPlayer = usersDKO.fetchUserById(reqGame.getOUserId());
 
         String textHeader = "Ninetac Game ID: " + gameId +
                 (reqGame.getGameState() == NinetacGamesGameState.IN_PROGRESS ? " - In Progress\n\n" : " - Complete\n\n");
         NinetacBoard board = new NinetacBoard(logger);
         board.deserialize(reqGame.getBoardState());
         sendBoardStateEmail(emailSender, "PBEMGS - NINETAC STATUS for game id " + gameId, textHeader,
-                gameId, xPlayer, oPlayer, board, reqGame.getPlayerIdToMove(), user.getUserId());
+                gameId, xPlayer, oPlayer, board, reqGame.getUserIdToMove(), user.getUserId());
     }
 
     @Override
@@ -266,7 +262,7 @@ public class Ninetac implements GameInterface {
 
             if (Duration.between(lastMoveTime, currTime).compareTo(TIMEOUT_DURATION) > 0) {
                 try {
-                    UsersRecord user = usersDKO.fetchUserById(game.getPlayerIdToMove());
+                    UsersRecord user = usersDKO.fetchUserById(game.getUserIdToMove());
                     NinetacBoard gameBoard = new NinetacBoard(logger);
                     gameBoard.deserialize(game.getBoardState());
                     int randomMove = gameBoard.getRandomMove();
@@ -280,7 +276,7 @@ public class Ninetac implements GameInterface {
                 LocalDateTime lastTime = game.getLastReminderTimestamp() == null ?
                         game.getLastMoveTimestamp() : game.getLastReminderTimestamp();
                 if (Duration.between(lastTime, currTime).compareTo(REMINDER_DURATION) > 0) {
-                    staleStringByUserId.put(game.getPlayerIdToMove(), "NINETAC: Game ID " + game.getGameId());
+                    staleStringByUserId.put(game.getUserIdToMove(), "NINETAC: Game ID " + game.getGameId());
                 }
             }
         }
@@ -300,31 +296,54 @@ public class Ninetac implements GameInterface {
     private void processGameOver(int winnerMarker, NinetacGamesRecord gameRecord, NinetacBoard gameBoard, SESEmailSender emailSender) {
         // Game over processing:
         // Find winning player user number (or null if drawn)
-        // Set the game state to complete, winner_id to winner.
+        // Set the game state to complete, and insert into player_outcomes.
         // Send final email (identical to both users)
-        UsersRecord xPlayer = usersDKO.fetchUserById(gameRecord.getXPlayerId());
-        UsersRecord oPlayer = usersDKO.fetchUserById(gameRecord.getOPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(gameRecord.getXUserId());
+        UsersRecord oPlayer = usersDKO.fetchUserById(gameRecord.getOUserId());
         UsersRecord winPlayer = null;
+        PlayerOutcomesOutcome xOutcome = PlayerOutcomesOutcome.DRAW;
+        PlayerOutcomesOutcome oOutcome = PlayerOutcomesOutcome.DRAW;
         if (winnerMarker == NinetacBoard.PLAYER_X) {
             winPlayer = xPlayer;
+            xOutcome = PlayerOutcomesOutcome.WIN;
+            oOutcome = PlayerOutcomesOutcome.LOSS;
         }
         if (winnerMarker == NinetacBoard.PLAYER_O) {
             winPlayer = oPlayer;
+            xOutcome = PlayerOutcomesOutcome.LOSS;
+            oOutcome = PlayerOutcomesOutcome.WIN;
         }
 
-        gameRecord.setVictorPlayerId(winPlayer == null ? -1L : winPlayer.getUserId());
+        PlayerOutcomesOutcome finalXOutcome = xOutcome;
+        PlayerOutcomesOutcome finalOOutcome = oOutcome;
+
         gameRecord.setGameState(NinetacGamesGameState.COMPLETE);
         gameRecord.setLastMoveTimestamp(LocalDateTime.now());
 
         // Store to DB
-        ninetacDKO.updateGame(gameRecord);
+        try {
+            dslContext.transaction(configuration -> {
+                DSLContext trx = DSL.using(configuration);
+                NinetacGameDKO txNinetacDKO = new NinetacGameDKO(trx);
+                PlayerOutcomesDKO txOutcomesDKO = new PlayerOutcomesDKO(trx);
 
-        // Emails out
-        String subject = "PBEMGS - NINETAC game number " + gameRecord.getGameId() + " has ended - " +
-                (winPlayer == null ? "DRAW!" : " winner is " + winPlayer.getHandle() + "!");
+                txNinetacDKO.updateGame(gameRecord);
+                txOutcomesDKO.insertOutcome(GameType.NINETAC, gameRecord.getGameId(), xPlayer.getUserId(),
+                        finalXOutcome, null, xPlayer.getUserId() == gameRecord.getStartingUserId());
+                txOutcomesDKO.insertOutcome(GameType.NINETAC, gameRecord.getGameId(), oPlayer.getUserId(),
+                        finalOOutcome, null, oPlayer.getUserId() == gameRecord.getStartingUserId());
+            });
 
-        sendBoardStateEmail(emailSender, subject, "Final Board:\n\n", gameRecord.getGameId(),
-                xPlayer, oPlayer, gameBoard, gameRecord.getPlayerIdToMove(), null);
+            // Emails out
+            String subject = "PBEMGS - NINETAC game number " + gameRecord.getGameId() + " has ended - " +
+                    (winPlayer == null ? "DRAW!" : " winner is " + winPlayer.getHandle() + "!");
+
+            sendBoardStateEmail(emailSender, subject, "Final Board:\n\n", gameRecord.getGameId(),
+                    xPlayer, oPlayer, gameBoard, gameRecord.getUserIdToMove(), null);
+        } catch (Exception e) {
+            logger.log("Exception caught processing end of ninetac game! " + e.getMessage());
+            throw e;
+        }
     }
 
     // email body retrieval and parsing
@@ -366,8 +385,8 @@ public class Ninetac implements GameInterface {
     }
 
     private void sendBoardStateEmail(SESEmailSender emailSender, String subject, String header,
-                                    long gameId, UsersRecord xPlayer, UsersRecord oPlayer,
-                                    NinetacBoard gameBoard, long playerToMove, Long toUserId) {
+                                     long gameId, UsersRecord xPlayer, UsersRecord oPlayer,
+                                     NinetacBoard gameBoard, long playerToMove, Long toUserId) {
         String xGameHeader = getXHeaderText(gameId, xPlayer, oPlayer, playerToMove, gameBoard);
         String oGameHeader = getOHeaderText(gameId, xPlayer, oPlayer, playerToMove, gameBoard);
 

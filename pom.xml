@@ -167,11 +167,14 @@
             </plugin>
 
             <!-- JOOQ Code Generation Plugin -->
+
+            <!-- jOOQ codegen moved to src/main/generated -->
             <plugin>
                 <groupId>org.jooq</groupId>
                 <artifactId>jooq-codegen-maven</artifactId>
-                <version>3.18.0</version> <!-- Use your JOOQ version -->
+                <version>3.18.0</version>
                 <executions>
+                    <!--
                     <execution>
                         <id>generate-jooq-code</id>
                         <phase>generate-sources</phase>
@@ -193,13 +196,36 @@
                                 </database>
                                 <target>
                                     <packageName>com.pbemgs.generated</packageName>
-                                    <directory>target/generated-sources/jooq</directory>
+                                    <directory>src/main/generated</directory>
                                 </target>
                             </generator>
                         </configuration>
                     </execution>
+                -->
                 </executions>
             </plugin>
+
+            <!-- Add generated sources to compile path -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>add-generated-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>src/main/generated</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 

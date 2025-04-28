@@ -2,17 +2,21 @@ package com.pbemgs.game.surge;
 
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.controller.SESEmailSender;
+import com.pbemgs.dko.PlayerOutcomesDKO;
 import com.pbemgs.dko.SurgeGamesDKO;
 import com.pbemgs.dko.SurgePlayersDKO;
 import com.pbemgs.dko.UsersDKO;
 import com.pbemgs.game.GameInterface;
 import com.pbemgs.game.GameMessageMailer;
-import com.pbemgs.game.OptionParser;
+import com.pbemgs.game.GameTextUtilities;
+import com.pbemgs.generated.enums.PlayerOutcomesOutcome;
 import com.pbemgs.generated.enums.SurgeGamesGameState;
 import com.pbemgs.generated.enums.SurgeGamesGameTimezone;
+import com.pbemgs.generated.enums.SurgePlayersStatus;
 import com.pbemgs.generated.tables.records.SurgeGamesRecord;
 import com.pbemgs.generated.tables.records.SurgePlayersRecord;
 import com.pbemgs.generated.tables.records.UsersRecord;
+import com.pbemgs.model.GameType;
 import com.pbemgs.model.Location;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
@@ -69,22 +73,23 @@ public class Surge implements GameInterface {
     public void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender) {
         List<SurgeGamesRecord> userGames = surgeGamesDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GameType.SURGE);
             return;
         }
 
         List<SurgeGamesRecord> openGames = surgeGamesDKO.getOpenGames();
         if (openGames.size() >= MAX_OPEN_GAMES) {
-            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GameType.SURGE);
             return;
         }
 
         try {
-            Map<String, String> options = OptionParser.parseOptions(email.getEmailBodyText(logger));
+            Map<String, String> options = GameTextUtilities.parseOptions(email.getEmailBodyText(logger));
             logger.log("-- Options read: " + options.toString());
-            boolean validOptions = validateOptions(options);
-            if (!validOptions) {
+            String validationErrors = validateOptions(options);
+            if (validationErrors != null) {
                 logger.log("Game creation failed: Invalid options.");
+                GameMessageMailer.createOptionsInvalid(emailSender, user.getEmailAddr(), GameType.SURGE, validationErrors);
                 emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - create_game surge failed (options)",
                         SurgeTextResponseProvider.getBadOptionsText());
                 return;
@@ -122,7 +127,7 @@ public class Surge implements GameInterface {
                 gameIdHolder.set(gameId);
             });
 
-            GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GAME_NAME, gameIdHolder.get());
+            GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GameType.SURGE, gameIdHolder.get());
             return;
         } catch (Exception e) {
             logger.log("Exception parsing options from create_game text body or creating game: " + e.getMessage());
@@ -136,20 +141,20 @@ public class Surge implements GameInterface {
     public void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender) {
         List<SurgeGamesRecord> userGames = surgeGamesDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GameType.SURGE);
             return;
         }
         SurgeGamesRecord game = surgeGamesDKO.getGameById(gameId);
 
         if (game == null || game.getGameState() != SurgeGamesGameState.OPEN) {
-            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
 
         List<SurgePlayersRecord> players = surgePlayersDKO.getPlayersForGame(gameId);
         Set<Long> playerIds = players.stream().map(SurgePlayersRecord::getUserId).collect(Collectors.toSet());
         if (playerIds.contains(user.getUserId())) {
-            GameMessageMailer.joinSelf(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.joinAlreadyIn(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
 
@@ -171,9 +176,11 @@ public class Surge implements GameInterface {
 
             if (isFinalPlayer) {
                 List<UsersRecord> userList = getUserList(game);
-                sendGameStateEmail(emailSender, game, userList, "PBEMGS - Surge game has started!  Game ID:", "");
+                List<SurgePlayersRecord> playerList = surgePlayersDKO.getPlayersForGame(game.getGameId());
+                sendGameStateEmail(emailSender, game, userList, playerList,
+                        "PBEMGS - Surge game has started!  Game ID:", "");
             } else {
-                GameMessageMailer.joinSuccess(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+                GameMessageMailer.joinSuccess(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             }
         } catch (Exception e) {
             logger.log("Error in join_game transaction: " + e.getMessage() + "\n" +
@@ -189,21 +196,19 @@ public class Surge implements GameInterface {
     public void processMove(UsersRecord user, long gameId, S3Email emailBody, SESEmailSender emailSender) {
         SurgeGamesRecord game = surgeGamesDKO.getGameById(gameId);
         if (game == null || game.getGameState() != SurgeGamesGameState.IN_PROGRESS) {
-            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
 
         List<SurgePlayersRecord> players = surgePlayersDKO.getPlayersForGame(gameId);
         if (players.stream().map(SurgePlayersRecord::getUserId).noneMatch(id -> id == user.getUserId())) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - move surge failed.",
-                    SurgeTextResponseProvider.getMoveNotPlayerText(gameId));
+            GameMessageMailer.moveNotAPlayer(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
 
         TextBodyParseResult move = parseMoveFromEmail(emailBody);
         if (!move.success()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - move surge failed (parsing).",
-                    SurgeTextResponseProvider.getMoveFailedParseText(gameId, move.error()));
+            GameMessageMailer.moveFailedToParse(emailSender, user.getEmailAddr(), GameType.SURGE, gameId, move.error());
             return;
         }
 
@@ -216,7 +221,7 @@ public class Surge implements GameInterface {
         SurgeBoard gameBoard = new SurgeBoard(game.getBoardRows(), game.getBoardCols(), SurgeBoard.PROD_COEFFS, logger);
         gameBoard.deserialize(game.getBoardState(), game.getGeyserState(), game.getPressureState(), game.getMomentumState());
 
-        int userPlayerNum = getPlayerNumber(user, players);
+        int userPlayerNum = getSeatNumber(user, players);
 
         // Used to check for multiple commands on a single (one-sided) gate - this prevents a player from
         // freezing a gate in its current state by commanding it both open and closed from the same square.
@@ -263,24 +268,21 @@ public class Surge implements GameInterface {
 
         emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - move surge success!",
                 "Your surge move command for game ID " + gameId + " has been accepted and stored.\n\n" +
-                sb.toString());
+                        sb.toString());
     }
 
     @Override
     public void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender) {
         // Validate part of game
         SurgeGamesRecord reqGame = surgeGamesDKO.getGameById(gameId);
-        if (reqGame == null || reqGame.getGameState() == SurgeGamesGameState.OPEN ||
-                reqGame.getGameState() == SurgeGamesGameState.ABANDONED) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - game_status surge command failed",
-                    SurgeTextResponseProvider.getStatusFailedNoGameText(gameId));
+        if (reqGame == null || reqGame.getGameState() == SurgeGamesGameState.OPEN) {
+            GameMessageMailer.statusNotValidGame(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
 
         SurgePlayersRecord playerForUser = surgePlayersDKO.getPlayerByUserId(gameId, user.getUserId());
         if (playerForUser == null) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - game_status surge failed.",
-                    SurgeTextResponseProvider.getStatusFailedNotPlayerText(gameId));
+            GameMessageMailer.statusNotYourGame(emailSender, user.getEmailAddr(), GameType.SURGE, gameId);
             return;
         }
         StringBuilder commandString = new StringBuilder();
@@ -294,7 +296,7 @@ public class Surge implements GameInterface {
             }
         }
 
-        sendGameStateEmail(emailSender, reqGame, List.of(user),
+        sendGameStateEmail(emailSender, reqGame, List.of(user), null,
                 "PBEMGS - game_status of surge Game ID", commandString.toString());
     }
 
@@ -318,14 +320,11 @@ public class Surge implements GameInterface {
         Set<Long> userIds = usersByGameMap.values().stream()
                 .flatMap(Set::stream).collect(Collectors.toSet());
 
-        // Fetch all user records at once
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(userIds);
 
-        // Construct the response
         StringBuilder sb = new StringBuilder();
         sb.append(SurgeTextResponseProvider.getOpenGamesHeaderText(openGames.size()));
 
-        // Stream over games and collect users per game
         openGames.forEach(game -> {
             List<UsersRecord> thisGameUsers = usersByGameMap.get(game.getGameId()).stream()
                     .map(usersById::get).collect(Collectors.toList());
@@ -389,7 +388,7 @@ public class Surge implements GameInterface {
         List<SurgePlayersRecord> playerRecs = surgePlayersDKO.getPlayersForGame(game.getGameId());
 
         // Sort by player number
-        playerRecs.sort(Comparator.comparingInt(SurgePlayersRecord::getPlayerNumber));
+        playerRecs.sort(Comparator.comparingInt(SurgePlayersRecord::getSeatNumber));
 
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(
                 playerRecs.stream().map(SurgePlayersRecord::getUserId).collect(Collectors.toSet())
@@ -400,18 +399,18 @@ public class Surge implements GameInterface {
                 .toList();
     }
 
-    private int getPlayerNumber(UsersRecord user, List<SurgePlayersRecord> players) {
+    private int getSeatNumber(UsersRecord user, List<SurgePlayersRecord> players) {
         return players.stream()
                 .filter(p -> p.getUserId() == user.getUserId())
                 .findFirst()
-                .map(SurgePlayersRecord::getPlayerNumber)
+                .map(SurgePlayersRecord::getSeatNumber)
                 .orElseThrow(() -> new IllegalStateException("Player not found in game!"));
     }
 
-    private boolean validateOptions(Map<String, String> options) {
+    private String validateOptions(Map<String, String> options) {
         if (!options.containsKey("players") || !options.containsKey("ticks") || !options.containsKey("limit")) {
             logger.log("-- create failed, missing required option(s).");
-            return false;
+            return "Missing at least one required option.";
         }
 
         try {
@@ -419,26 +418,24 @@ public class Surge implements GameInterface {
             int players = Integer.parseInt(options.get("players"));
             if (players < 2 || players > 4) {
                 logger.log("-- create failed, invalid number of players. Only 2-4 player games are currently available.");
-                return false;
+                return "Invalid number of players - currently 2 to 4 player maps are available.";
             }
 
-            // Validate Command Limit (Must be between 2 and 10)
             int climit = Integer.parseInt(options.get("limit"));
             if (climit < 3 || climit > 6) {
                 logger.log("-- create failed, invalid command limit. Must be between 3 and 6.");
-                return false;
+                return "Invalid command limit - must be between 3 and 6.";
             }
 
-            // Validate Ticks (Valid values: 1, 2, 3, 4)
             int ticks = Integer.parseInt(options.get("ticks"));
             if (ticks < 1 || ticks > 4) {
                 logger.log("-- create failed, invalid ticks value. Must be 1, 2, 3, or 4.");
-                return false;
+                return "Invalid ticks value, must be between 1 and 4.";
             }
 
         } catch (NumberFormatException e) {
             logger.log("-- create failed, invalid numeric value for players, flow, command limit, or ticks.");
-            return false;
+            return "Invalid numeric format while reading options.";
         }
 
         // Validate Time Zone (Optional, defaults to "ET")
@@ -446,10 +443,11 @@ public class Surge implements GameInterface {
         Set<String> validZones = Set.of("ET", "GMT", "SH", "TK");  // SH = Shanghai, TK = Tokyo
         if (!validZones.contains(zone)) {
             logger.log("-- create failed, invalid zone. Valid options: ET, GMT, SH (Shanghai), TK (Tokyo).");
-            return false;
+            return "Invalid value of 'zone' option - must be one of 'ET', 'GMT', 'SH', or 'TK'";
+
         }
 
-        return true;
+        return null;
     }  // end validationOptions()
 
     // Gate command (move) parsing methods
@@ -573,6 +571,7 @@ public class Surge implements GameInterface {
                 SurgeBoard board = new SurgeBoard(game.getBoardRows(), game.getBoardCols(), SurgeBoard.PROD_COEFFS, logger);
                 board.deserialize(game.getBoardState(), game.getGeyserState(), game.getPressureState(), game.getMomentumState());
                 List<SurgePlayersRecord> players = surgePlayersDKO.getPlayersForGame(game.getGameId());
+                List<UsersRecord> users = getUserList(game);
 
                 Set<SurgeCommand> commands = players.stream()
                         .map(SurgePlayersRecord::getCurrentCommand)  // Extract command string
@@ -593,12 +592,71 @@ public class Surge implements GameInterface {
                 // Update player data (wipe commands)
                 surgePlayersDKO.clearAllCommandsForGame(game.getGameId());
 
-                // TODO: Check for eliminated players and update their state (and send sad-trombone email)
+                // Board State Email out
+                sendGameStateEmail(emailSender, game, users, players, "MOVE SURGE", commandString);
 
-                // Email out
-                List<UsersRecord> users = getUserList(game);
-                sendGameStateEmail(emailSender, game, users, "MOVE SURGE", commandString);
-            }
+                // Check for player elimination (< 5% of total force on map)
+                Map<Integer, Integer> totalForceByPlayer = board.getTotalForceMap();
+                int totalForce = totalForceByPlayer.values().stream().mapToInt(Integer::intValue).sum();
+                totalForceByPlayer.remove(0);  // remove neutral for finding the number of remaining players.
+                int remainingPlayers = totalForceByPlayer.size();
+                int activePlayers = 0;
+                int winnerSeat = 0;
+                for (SurgePlayersRecord player : players) {
+                    if (player.getStatus() == SurgePlayersStatus.ACTIVE) {
+                        double percent = (100.0 * totalForceByPlayer.get(player.getSeatNumber())) / totalForce;
+                        logger.log("- Elim check: " + player.getSeatNumber() + " has " + percent + "% of total (" + totalForce + ")");
+                        if (percent < 5.0) {
+                            logger.log("-- attempting to eliminate player!");
+                            handlePlayerElimination(game, board, player.getSeatNumber(), player.getUserId(), remainingPlayers);
+                            emailSender.sendEmail(users.get(player.getSeatNumber() - 1).getEmailAddr(),
+                                    "PBEMGS - Eliminated in Surge Game " + game.getGameId(),
+                                    SurgeTextResponseProvider.getEliminationText());
+                        } else {
+                            ++activePlayers;
+                            winnerSeat = player.getSeatNumber();
+                        }
+                    }
+                }
+
+                logger.log("active players: " + activePlayers);
+                if (activePlayers == 1) {
+                    processEndOfGame(game, users.get(winnerSeat - 1), emailSender);
+                }
+            }  // end if (need to update this game)
+        }
+    }
+
+    private void handlePlayerElimination(SurgeGamesRecord game, SurgeBoard gameBoard,
+                                         int playerId, long userId, int remainingPlayers) {
+        try {
+            gameBoard.eliminatePlayer(playerId);
+            game.setBoardState(gameBoard.serializeBoardState());
+            dslContext.transaction(configuration -> {
+                DSLContext trx = DSL.using(configuration);
+                new SurgeGamesDKO(trx).updateGame(game);
+                new SurgePlayersDKO(trx).eliminatePlayer(userId, game.getGameId());
+                new PlayerOutcomesDKO(trx).insertOutcome(GameType.SURGE, game.getGameId(), userId,
+                        PlayerOutcomesOutcome.LOSS, remainingPlayers, null);
+            });
+        } catch (Exception e) {
+            // fall through - it'll catch on the next pass
+        }
+    }
+
+    private void processEndOfGame(SurgeGamesRecord game, UsersRecord user, SESEmailSender emailSender) {
+        try {
+            game.setGameState(SurgeGamesGameState.COMPLETE);
+            dslContext.transaction(configuration -> {
+                DSLContext trx = DSL.using(configuration);
+                new SurgeGamesDKO(trx).updateGame(game);
+                new PlayerOutcomesDKO(trx).insertOutcome(GameType.SURGE, game.getGameId(), user.getUserId(),
+                        PlayerOutcomesOutcome.WIN, 1, null);
+            });
+            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - Victory in Surge Game " + game.getGameId() + "!",
+                    SurgeTextResponseProvider.getVictoryText());
+        } catch (Exception e) {
+            // do nothing but don't throw - it'll catch next tick
         }
     }
 
@@ -627,7 +685,7 @@ public class Surge implements GameInterface {
     }
 
     /**
-     *  Utility to get a formatted string of the remaining time until the next update (from now).
+     * Utility to get a formatted string of the remaining time until the next update (from now).
      */
     private String getUntilNextUpdateString(ZonedDateTime nextUpdateTime) {
         Duration durationUntilNextUpdate = Duration.between(ZonedDateTime.now(nextUpdateTime.getZone()), nextUpdateTime);
@@ -646,7 +704,7 @@ public class Surge implements GameInterface {
 
     // Game state email methods
     private void sendGameStateEmail(SESEmailSender emailSender, SurgeGamesRecord game, List<UsersRecord> userList,
-                                    String subjectHeader, String commandWrite) {
+                                    List<SurgePlayersRecord> playerList, String subjectHeader, String commandWrite) {
         SurgeBoard gameBoard = new SurgeBoard(game.getBoardRows(), game.getBoardCols(), SurgeBoard.PROD_COEFFS, logger);
         gameBoard.deserialize(game.getBoardState(), game.getGeyserState(), game.getPressureState(), game.getMomentumState());
         Map<Integer, Integer> forceByPlayerId = gameBoard.getTotalForceMap();
@@ -657,11 +715,13 @@ public class Surge implements GameInterface {
         String threatenedGeyserString = gameBoard.getThreatenedGeyserList();
         String threatOutput = threatenedGeyserString.isEmpty() ? "" : "\n\nThreatened Geyser Force:\n" + threatenedGeyserString;
 
-        for (UsersRecord user : userList) {
-            emailSender.sendEmail(user.getEmailAddr(), subjectHeader + " " + game.getGameId(),
-                    htmlHeader + "\n\n" + commandWrite +
-                            "\n\nBoard State:\n\n" + boardTextHtml + "\n\n" + threatOutput +
-                            "\n\n" + symbolKeyTextHtml);
+        for (int i = 0; i < userList.size(); ++i) {
+            if (playerList == null || playerList.get(i).getStatus() == SurgePlayersStatus.ACTIVE) {
+                emailSender.sendEmail(userList.get(i).getEmailAddr(), subjectHeader + " " + game.getGameId(),
+                        htmlHeader + "\n\n" + commandWrite +
+                                "\n\nBoard State:\n\n" + boardTextHtml + "\n\n" + threatOutput +
+                                "\n\n" + symbolKeyTextHtml);
+            }
         }
     }
 
@@ -673,10 +733,12 @@ public class Surge implements GameInterface {
         ZonedDateTime nextUpdateTime = getNextUpdateTime(game.getTicksPerDay(), GAME_TIME_ZONES.get(game.getGameTimezone().getLiteral()), game.getLastTimeStep());
         String timeHeader = nextUpdateTime.format(TIME_FORMATTER);
 
-        sb.append("Time of next board update: ").append(timeHeader)
-                .append(" (in: ").append(getUntilNextUpdateString(nextUpdateTime)).append(")").append("\n\n");
-        sb.append("Players:\n");
+        if (game.getGameState() == SurgeGamesGameState.IN_PROGRESS) {
+            sb.append("Time of next board update: ").append(timeHeader)
+                    .append(" (in: ").append(getUntilNextUpdateString(nextUpdateTime)).append(")").append("\n\n");
+        }
 
+        sb.append("Players:\n");
         for (int x = 0; x < usersInGameOrdered.size(); ++x) {
             sb.append("<span style='color:")
                     .append(SurgeColor.COLOR.get(x + 1)) // Get player color
@@ -685,7 +747,7 @@ public class Surge implements GameInterface {
                     .append(": ")
                     .append(usersInGameOrdered.get(x).getHandle())
                     .append("</span>  Total: ")
-                    .append(forceByPlayerId.getOrDefault(x + 1, 0))
+                    .append(forceByPlayerId.getOrDefault(x + 1, 0) / 10)
                     .append("\n");
         }
         return sb.toString();

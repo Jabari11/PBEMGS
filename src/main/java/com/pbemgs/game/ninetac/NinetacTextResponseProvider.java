@@ -64,17 +64,11 @@ public class NinetacTextResponseProvider {
 
     public static String getOpenGamesHeaderText(int count) {
         return "There are " + count + " currently open Ninetac games.\n" +
-                "Use 'join_game ninetac [game_id]' to join one of the following:\n\n";
+                "Use 'join_game ninetac [game_id]' to join one of the following:\n";
     }
 
     public static String getOpenGameDescription(Long gameId, UsersRecord usersRecord) {
         return "- Game ID: " + gameId.toString() + " - Created By: " + usersRecord.getHandle() + "\n";
-    }
-
-    public static String getMoveNotActiveText(long gameId) {
-        return "You requested a move in Ninetac game ID " + gameId + ".\n" +
-                "It is either your opponent's turn, or this isn't a game you are part of.\n\n" +
-                "Use 'my_games ninetac' to get the list of games you are a part of and the current player!";
     }
 
     public static String getMoveInvalidNumberText(int move, long gameId) {
@@ -85,18 +79,6 @@ public class NinetacTextResponseProvider {
     public static String getMoveUnavailableText(long gameId, int move) {
         return "You requested the move " + move + " in Ninetac Game ID: " + gameId + ".\n" +
                 "This number is not available on the board.  Please pick a valid number.";
-    }
-
-    public static String getStatusFailedNoGameText(long gameId) {
-        return "You requested status for Ninetac game id " + gameId + ".\n" +
-                "This game id either doesn't exist or hasn't started.\n\n" +
-                "Use 'my_games ninetac' to get a list of the games you are a part of!";
-    }
-
-    public static String getStatusFailedNotYourGameText(long gameId) {
-        return "You requested status for Ninetac game id " + gameId + ".\n" +
-                "You are not a player in this game, so the command is not allowed.\n\n" +
-                "Use 'my_games ninetac' to get a list of the games you are a part of!";
     }
 
     public static String getGameHeader(long gameId, String topSymbol, String topHandle, int topClaimed, boolean topActive,

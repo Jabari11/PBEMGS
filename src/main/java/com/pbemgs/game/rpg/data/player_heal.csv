@@ -1,0 +1,2 @@
+ActionHeal,targetType,splashCount,chanceToHit,baseQuantity,condition
+Heal_ST_40Base,LOWEST_HPP_ALLY,0,200,40,

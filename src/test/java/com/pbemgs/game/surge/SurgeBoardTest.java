@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -142,23 +141,25 @@ public class SurgeBoardTest {
         assertEquals(boardBefore, boardAfter, "Board state should remain unchanged with no commands");
     }
 
-/*
+
     // In-dev experimentation with the algo - testing basic movement.
     @Test
     public void flowTest1() {
         String flowBoardState =
                 "1000:1:OC,0:0:CC,1000:1:CC|" +  // basic gate capacity
-                "500:1:OC,500:1:CC,0:0:CC|" +    // steady-state, no move
-                "700:1:OC,1000:1:CC,0:0:CC|" +   // push below edge capacity
-                "1000:1:OC,0:0:OC,0:0:CC|" +      // 2-tile chain
-                "0:0:OC,1000:1:OC,0:0:CC|" +     // 2-direction push
-                "1300:1:OC,950:1:CC,0:0:CC|" +   // geyser oversaturation
-                "1300:1:OC,1000:1:OC,500:1:CC|" + // geyser above push-through
-                "1000:1:OO,500:1:CO,0:0:CC|" +   // 4-tile square
-                "500:1:OC,0:0:CC,0:0:CC";
+                        "500:1:OC,500:1:CC,0:0:CC|" +    // steady-state, no move
+                        "700:1:OC,1000:1:CC,0:0:CC|" +   // push below edge capacity
+                        "1000:1:OC,0:0:OC,0:0:CC|" +      // 2-tile chain
+                        "0:0:OC,1000:1:OC,0:0:CC|" +     // 2-direction push
+                        "1300:1:OC,950:1:CC,0:0:CC|" +   // geyser oversaturation
+                        "1300:1:OC,1000:1:OC,500:1:CC|" + // geyser above push-through
+                        "1000:1:OO,500:1:CO,0:0:CC|" +   // 4-tile square
+                        "500:1:OC,0:0:CC,0:0:CC|" +
+                        "400:1:OC,500:1:CO,0:0:CC|" +   // pull-through case
+                        "0:0:CC,100:1:CC,0:0:CC";
 
         String flowGeyserState = null;
-        flowTestBoard = new SurgeBoard(7, 3, SurgeBoard.DEFAULT_COEFFS, mockLogger);
+        flowTestBoard = new SurgeBoard(11, 3, SurgeBoard.PROD_COEFFS, mockLogger);
         flowTestBoard.deserialize(flowBoardState, flowGeyserState, "", "");
         flowTestBoard.buildMomentumMap(300);
 
@@ -167,7 +168,7 @@ public class SurgeBoardTest {
         // verifications later.
     }
 
-/*
+    /*
     // In-dev experimentation - testing movement into combat.
     @Test
     public void flowTest2() {
@@ -182,11 +183,11 @@ public class SurgeBoardTest {
         flowTestBoard.processUpdateStep(300, 3);
     }
 
-*/
-
+     */
 
 
 //In-dev experimentation with the algo
+    /*
     @Test
     public void testCombat() {
         // A few basic 2-player combat tests.  Just looking at logs before validating.
@@ -241,6 +242,7 @@ public class SurgeBoardTest {
 
     }
 
+     */
 
 
 }

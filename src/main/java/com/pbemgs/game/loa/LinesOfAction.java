@@ -5,15 +5,19 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.pbemgs.controller.SESEmailSender;
 import com.pbemgs.dko.LoaGameDKO;
+import com.pbemgs.dko.PlayerOutcomesDKO;
 import com.pbemgs.dko.UsersDKO;
 import com.pbemgs.game.GameInterface;
 import com.pbemgs.game.GameMessageMailer;
 import com.pbemgs.generated.enums.LoaGamesGameState;
+import com.pbemgs.generated.enums.PlayerOutcomesOutcome;
 import com.pbemgs.generated.tables.records.LoaGamesRecord;
 import com.pbemgs.generated.tables.records.UsersRecord;
+import com.pbemgs.model.GameType;
 import com.pbemgs.model.Location;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -26,23 +30,26 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class LinesOfAction implements GameInterface {
-
-    private static final String GAME_NAME = "LOA";
     private static final int PLAYER_GAME_LIMIT = 3;
     private static final int MAX_OPEN_GAMES = 10;
     private final Duration REMINDER_DURATION = Duration.ofHours(24);
     private final Duration TIMEOUT_DURATION = Duration.ofHours(96);
 
+    private final DSLContext dslContext;
     private final LoaGameDKO loaGameDKO;
     private final UsersDKO usersDKO;
     private final LambdaLogger logger;
 
     private final BiMap<UsersRecord, Character> symbolByUser;
 
-    public record LoaMove(Location from, Location to) {}
-    private record TextBodyParseResult(LoaMove move, boolean success, String error) {}
+    public record LoaMove(Location from, Location to) {
+    }
+
+    private record TextBodyParseResult(LoaMove move, boolean success, String error) {
+    }
 
     public LinesOfAction(DSLContext dslContext, LambdaLogger logger) {
+        this.dslContext = dslContext;
         loaGameDKO = new LoaGameDKO(dslContext);
         usersDKO = new UsersDKO(dslContext);
         this.logger = logger;
@@ -53,42 +60,42 @@ public class LinesOfAction implements GameInterface {
     public void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender) {
         List<LoaGamesRecord> userGames = loaGameDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GameType.LOA);
             return;
         }
 
         List<LoaGamesRecord> openGames = loaGameDKO.getOpenGames();
         if (openGames.size() >= MAX_OPEN_GAMES) {
-            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GameType.LOA);
             return;
         }
 
         LoaBoard newBoard = new LoaBoard(logger);
         newBoard.createNewGame();
         Long newGameNum = loaGameDKO.createNewGame(user.getUserId(), newBoard.serialize());
-        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GAME_NAME, newGameNum);
+        GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GameType.LOA, newGameNum);
     }
 
     @Override
     public void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender) {
         List<LoaGamesRecord> userGames = loaGameDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GameType.LOA);
             return;
         }
         LoaGamesRecord game = loaGameDKO.getGameById(gameId);
 
         // Validity checks: game must exist, be in OPEN state, and not have a X-player of self.
         if (game == null || game.getGameState() != LoaGamesGameState.OPEN) {
-            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
-        if (Objects.equals(game.getXPlayerId(), user.getUserId())) {
-            GameMessageMailer.joinSelf(emailSender, user.getEmailAddr(), GAME_NAME);
+        if (Objects.equals(game.getXUserId(), user.getUserId())) {
+            GameMessageMailer.joinAlreadyIn(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
 
-        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXUserId());
 
         // get player id to move first
         Random rng = new Random();
@@ -113,27 +120,25 @@ public class LinesOfAction implements GameInterface {
 
         // Validity checks: gameBoard must exist, be in IN_PROGRESS state, and the user must be active player.
         if (game == null || game.getGameState() != LoaGamesGameState.IN_PROGRESS) {
-            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
-        if (!Objects.equals(game.getPlayerIdToMove(), user.getUserId())) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE LOA failed",
-                    LoaTextResponseProvider.getMoveNotActiveText(gameId));
+        if (!Objects.equals(game.getUserIdToMove(), user.getUserId())) {
+            GameMessageMailer.moveNotActiveText(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
-
-        populatePlayerMap(game);
 
         // Parse email body for the move
         TextBodyParseResult parseResult = parseMoveFromEmail(emailBody);
         if (!parseResult.success()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE LOA failed",
-                    parseResult.error());
+            GameMessageMailer.moveFailedToParse(emailSender, user.getEmailAddr(), GameType.LOA, gameId, parseResult.error());
+            return;
         }
 
         LoaMove move = parseResult.move();
 
         // Load gameBoard, verify move is valid
+        populatePlayerMap(game);
         LoaBoard gameBoard = new LoaBoard(logger);
         gameBoard.deserialize(game.getBoardState());
         char playerSymbol = symbolByUser.get(user);
@@ -151,7 +156,6 @@ public class LinesOfAction implements GameInterface {
 
     // Helper to fully execute a validated move
     private void executeMove(UsersRecord user, LoaGamesRecord game, LoaBoard gameBoard, LoaMove move, SESEmailSender emailSender) {
-
         char playerSymbol = symbolByUser.get(user);
         char oppSymbol = playerSymbol == LoaBoard.PLAYER_X ? LoaBoard.PLAYER_O : LoaBoard.PLAYER_X;
         boolean capture = gameBoard.makeMove(playerSymbol, move);
@@ -159,7 +163,7 @@ public class LinesOfAction implements GameInterface {
 
         // Swap active player
         UsersRecord oppUser = symbolByUser.inverse().get(oppSymbol);
-        game.setPlayerIdToMove(oppUser.getUserId());
+        game.setUserIdToMove(oppUser.getUserId());
         game.setLastMoveTimestamp(LocalDateTime.now());
         game.setLastReminderTimestamp(null);
 
@@ -178,12 +182,11 @@ public class LinesOfAction implements GameInterface {
 
         // Send emails out (2)
         // Generate the "header" portion for both players
-
         String boardHeader = user.getHandle() + " moved from " + move.from() + " to " + move.to() +
                 (capture ? " - capture!\n\n" : ".\n\n");
         sendBoardStateEmail(emailSender, "MOVE LOA " + game.getGameId(),
-                 boardHeader, game.getGameId(),
-                 gameBoard, oppUser.getUserId(), null);
+                boardHeader, game.getGameId(),
+                gameBoard, oppUser.getUserId(), null);
     }
 
     @Override
@@ -192,12 +195,12 @@ public class LinesOfAction implements GameInterface {
         if (openGames.isEmpty()) {
             return LoaTextResponseProvider.getNoOpenGamesText();
         }
-        Set<Long> creatorUserIds = openGames.stream().map(LoaGamesRecord::getXPlayerId).collect(Collectors.toSet());
+        Set<Long> creatorUserIds = openGames.stream().map(LoaGamesRecord::getXUserId).collect(Collectors.toSet());
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(creatorUserIds);
         StringBuilder sb = new StringBuilder();
         sb.append(LoaTextResponseProvider.getOpenGamesHeaderText(openGames.size()));
         for (LoaGamesRecord game : openGames) {
-            sb.append(LoaTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXPlayerId())));
+            sb.append(LoaTextResponseProvider.getOpenGameDescription(game.getGameId(), usersById.get(game.getXUserId())));
         }
         return sb.toString();
     }
@@ -218,7 +221,7 @@ public class LinesOfAction implements GameInterface {
                 sb.append(" is waiting for an opponent.\n");
             } else {
                 sb.append(" is in progress - ");
-                sb.append(game.getPlayerIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
+                sb.append(game.getUserIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
             }
         }
         return sb.toString();
@@ -228,13 +231,11 @@ public class LinesOfAction implements GameInterface {
     public void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender) {
         LoaGamesRecord game = loaGameDKO.getGameById(gameId);
         if (game == null || game.getGameState() == LoaGamesGameState.OPEN) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    LoaTextResponseProvider.getStatusFailedNoGameText(gameId));
+            GameMessageMailer.statusNotValidGame(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
-        if (user.getUserId() != game.getXPlayerId() && user.getUserId() != game.getOPlayerId()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    LoaTextResponseProvider.getStatusFailedNotYourGameText(gameId));
+        if (user.getUserId() != game.getXUserId() && user.getUserId() != game.getOUserId()) {
+            GameMessageMailer.statusNotYourGame(emailSender, user.getEmailAddr(), GameType.LOA, gameId);
             return;
         }
 
@@ -245,7 +246,7 @@ public class LinesOfAction implements GameInterface {
         LoaBoard gameBoard = new LoaBoard(logger);
         gameBoard.deserialize(game.getBoardState());
         sendBoardStateEmail(emailSender, "PBEMGS - LOA STATUS for game id " + gameId, textHeader,
-                gameId, gameBoard, game.getPlayerIdToMove(), user.getUserId());
+                gameId, gameBoard, game.getUserIdToMove(), user.getUserId());
     }
 
     @Override
@@ -263,7 +264,7 @@ public class LinesOfAction implements GameInterface {
             if (Duration.between(lastMoveTime, currTime).compareTo(TIMEOUT_DURATION) > 0) {
                 try {
                     populatePlayerMap(game);
-                    UsersRecord user = usersDKO.fetchUserById(game.getPlayerIdToMove());
+                    UsersRecord user = usersDKO.fetchUserById(game.getUserIdToMove());
                     LoaBoard gameBoard = new LoaBoard(logger);
                     gameBoard.deserialize(game.getBoardState());
                     char playerSymbol = symbolByUser.get(user);
@@ -278,7 +279,7 @@ public class LinesOfAction implements GameInterface {
                 LocalDateTime lastTime = game.getLastReminderTimestamp() == null ?
                         game.getLastMoveTimestamp() : game.getLastReminderTimestamp();
                 if (Duration.between(lastTime, currTime).compareTo(REMINDER_DURATION) > 0) {
-                    staleStringByUserId.put(game.getPlayerIdToMove(), "LOA: Game ID " + game.getGameId());
+                    staleStringByUserId.put(game.getUserIdToMove(), "LOA: Game ID " + game.getGameId());
                 }
             }
         }
@@ -298,23 +299,38 @@ public class LinesOfAction implements GameInterface {
     private void processGameOver(char winnerMarker, LoaGamesRecord game, LoaBoard gameBoard, SESEmailSender emailSender) {
         // Game over processing:
         // Find winning player user number
-        // Set the game state to complete, winner_id to winner.
+        // Set the game state to complete
+        // Store off game state and player result rows
         // Send final email (identical to both users)
-        UsersRecord winPlayer = symbolByUser.inverse().get(winnerMarker);
+        UsersRecord winUser = symbolByUser.inverse().get(winnerMarker);
+        Long winnerUserId = winUser.getUserId();
 
-        game.setVictorPlayerId(winPlayer.getUserId());
         game.setGameState(LoaGamesGameState.COMPLETE);
         game.setLastMoveTimestamp(LocalDateTime.now());
+        game.setLastReminderTimestamp(null);
 
-        // Store to DB
-        loaGameDKO.updateGame(game);
+        try {
+            dslContext.transaction(configuration -> {
+                DSLContext trx = DSL.using(configuration);
+                LoaGameDKO txLoaDKO = new LoaGameDKO(trx);
+                PlayerOutcomesDKO txOutcomesDKO = new PlayerOutcomesDKO(trx);
+                for (UsersRecord user : symbolByUser.keySet()) {
+                    PlayerOutcomesOutcome outcome = user.getUserId() == winnerUserId ? PlayerOutcomesOutcome.WIN : PlayerOutcomesOutcome.LOSS;
+                    txOutcomesDKO.insertOutcome(GameType.LOA, game.getGameId(), user.getUserId(),
+                            outcome, null, user.getUserId() == game.getStartingUserId());
+                }
+                txLoaDKO.updateGame(game);
+                // Emails out
+                String subject = "PBEMGS - LOA game number " + game.getGameId() + " has ended - winner is " +
+                        winUser.getHandle() + "!";
 
-        // Emails out
-        String subject = "PBEMGS - LOA game number " + game.getGameId() + " has ended - winner is " +
-                winPlayer.getHandle() + "!";
-
-        sendBoardStateEmail(emailSender, subject, "Final Board:\n\n", game.getGameId(),
-               gameBoard, game.getPlayerIdToMove(), null);
+                sendBoardStateEmail(emailSender, subject, "Final Board:\n\n", game.getGameId(),
+                        gameBoard, game.getUserIdToMove(), null);
+            });
+        } catch (Exception e) {
+            logger.log("Exception while processing end of GoMoku game: " + e.getMessage());
+            throw e;
+        }
     }
 
     // email body retrieval and parsing
@@ -350,8 +366,8 @@ public class LinesOfAction implements GameInterface {
 
     private void populatePlayerMap(LoaGamesRecord game) {
         symbolByUser.clear();
-        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXPlayerId());
-        UsersRecord oPlayer = usersDKO.fetchUserById(game.getOPlayerId());
+        UsersRecord xPlayer = usersDKO.fetchUserById(game.getXUserId());
+        UsersRecord oPlayer = usersDKO.fetchUserById(game.getOUserId());
         symbolByUser.put(xPlayer, LoaBoard.PLAYER_X);
         symbolByUser.put(oPlayer, LoaBoard.PLAYER_O);
     }

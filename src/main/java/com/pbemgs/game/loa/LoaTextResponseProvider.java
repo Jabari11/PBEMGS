@@ -78,39 +78,21 @@ public class LoaTextResponseProvider {
     }
 
     public static String getNoOpenGamesText() {
-        return "There are currently no open LOA games to join - use 'create_game loa' to create one!";
+        return "There are currently no open Lines of Action games to join - use 'create_game loa' to create one!\n";
     }
 
     public static String getOpenGamesHeaderText(int count) {
-        return "There are " + count + " currently open LOA games.\n" +
-                "Use 'join_game loa [game_id]' to join one of the following:\n\n";
+        return "There are " + count + " currently open Lines of Action games.\n" +
+                "Use 'join_game loa [game_id]' to join one of the following:\n";
     }
 
     public static String getOpenGameDescription(Long gameId, UsersRecord usersRecord) {
         return "- Game ID: " + gameId.toString() + " - Created By: " + usersRecord.getHandle() + "\n";
     }
 
-    public static String getMoveNotActiveText(long gameId) {
-        return "You requested a move in LOA game ID " + gameId + ".\n" +
-                "It is either your opponent's turn, or this isn't a game you are part of.\n\n" +
-                "Use 'my_games loa' to get the list of games you are a part of and the current player!";
-    }
-
     public static String getMoveInvalidText(LinesOfAction.LoaMove move, long gameId, String errorMessage) {
         return "You requested the move (" + move.from() + ") - (" + move.to() + ") in LOA Game ID: " + gameId + ".\n" +
                 "This move is not valid.  Error message: " + errorMessage;
-    }
-
-    public static String getStatusFailedNoGameText(long gameId) {
-        return "You requested status for LOA game id " + gameId + ".\n" +
-                "This game id either doesn't exist or hasn't started.\n\n" +
-                "Use 'my_games loa' to get a list of the games you are a part of!";
-    }
-
-    public static String getStatusFailedNotYourGameText(long gameId) {
-        return "You requested status for LOA game id " + gameId + ".\n" +
-                "You are not a player in this game, so the command is not allowed.\n\n" +
-                "Use 'my_games loa' to get a list of the games you are a part of!";
     }
 
     public static String getGameHeader(long gameId, String topSymbol, String topHandle, int topCount, boolean topActive,

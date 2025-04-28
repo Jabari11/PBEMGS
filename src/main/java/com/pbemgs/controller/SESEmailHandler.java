@@ -28,7 +28,7 @@ import java.util.Map;
 
 /**
  * Email Handler: AWS Lambda Entry Point for handling a new email in the system.
- *
+ * <p>
  * This simply has the interface for the Lambda call, and forwards on to the main back-end handler.
  */
 public class SESEmailHandler implements RequestHandler<Map<String, Object>, String> {
@@ -70,7 +70,7 @@ public class SESEmailHandler implements RequestHandler<Map<String, Object>, Stri
             try {
                 S3Email email = S3Email.fromJson(record, logger);
                 if (email.getFrom().equalsIgnoreCase("pbemgs@angryturtlestudios.com") ||
-                    email.getFrom().equalsIgnoreCase("pbemgs@mail.angryturtlestudios.com")) {
+                        email.getFrom().equalsIgnoreCase("pbemgs@mail.angryturtlestudios.com")) {
                     logger.log("Ignoring mail from self! - subject line is: " + email.getSubject());
                     continue;
                 }

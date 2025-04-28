@@ -102,7 +102,7 @@ public class SurgeTextResponseProvider {
                 "  - 3 ticks/day: 11:00am (1100 hours), 5:00pm (1700 hours), 10:00pm (2200 hours)\n" +
                 "  - 4 ticks/day: 12:00am (0000 hours), 10:00am (1000 hours), 3:00pm (1500 hours), 8:00pm (2000 hours)\n\n" +
                 "Game Status:\n" +
-                "- AVAILABLE - IN INITIAL TESTING AND MAP DESIGN:\n" +
+                "- AVAILABLE - RELEASED:\n" +
                 "  Available to play!  I currently only have some 2-player maps and a 3-player and 4-player map created,\n" +
                 "  working on adding more maps for larger numbers of players (aiming for 8P games max!)\n" +
                 "  If game creation doesn't work try some other options for players and/or limit.\n" +
@@ -129,14 +129,13 @@ public class SurgeTextResponseProvider {
     }
 
     public static String getNoOpenGamesText() {
-        return "There are currently no Surge games waiting for players -\n" +
-                "use 'create_game surge' to create a new game!\n";
+        return "There are currently no Surge games waiting for players - use 'create_game surge' to create one!\n";
     }
 
     public static String getOpenGamesHeaderText(int count) {
         return "There are " + count + " currently open Surge games.\n" +
-                "Use 'join_game surge [game_id]' to join one of the following:\n\n" +
-                "Game ID\t#Plr\tTicks\tTZone\tC-Limit\n\n";
+                "Use 'join_game surge [game_id]' to join one of the following:\n" +
+                "Game ID\t#Plr\tTicks\tTZone\tC-Limit\n";
     }
 
     public static String getOpenGameDescription(SurgeGamesRecord game, List<UsersRecord> joined) {
@@ -151,19 +150,8 @@ public class SurgeTextResponseProvider {
         for (UsersRecord user : joined) {
             sb.append(user.getHandle()).append("  ");
         }
+        sb.append("\n");
         return sb.toString();
-    }
-
-    public static String getMoveNotPlayerText(long gameId) {
-        return "You requested status for Surge game id " + gameId + ".\n" +
-                "You are not a player in this game, so the command is not allowed.\n\n" +
-                "Use 'my_games surge' to get a list of the games you are a part of!";
-    }
-
-    public static String getMoveFailedParseText(long gameId, String error) {
-        return "Your move command for Surge game id " + gameId + " failed to parse correctly.\n" +
-                "Error message: " + error + "\n\n" +
-                "<format>.";
     }
 
     public static String getMoveFailedLimitText(long gameId, int size, Integer commandLimit) {
@@ -177,17 +165,17 @@ public class SurgeTextResponseProvider {
                 "Error message(s):\n" + error + ".";
     }
 
-
-    public static String getStatusFailedNoGameText(long gameId) {
-        return "You requested status for Surge game id " + gameId + ".\n" +
-                "This game id either doesn't exist or hasn't started.\n\n" +
-                "Use 'my_games surge' to get a list of the games you are a part of!";
+    public static String getEliminationText() {
+        return "You control less than 5% of the total liquid on the map - your force has lost\n" +
+                "its chemical properties and become inert.  Jump into a new game and try again!\n" +
+                "You will no longer receive updates for this game, but you can still send\n" +
+                "a 'game_status' command to peek at the map.";
     }
 
-    public static String getStatusFailedNotPlayerText(long gameId) {
-        return "You requested status for Surge game id " + gameId + ".\n" +
-                "You are not a player in this game, so the command is not allowed.\n\n" +
-                "Use 'my_games surge' to get a list of the games you are a part of!";
+    public static String getVictoryText() {
+        return "Congratulations - your liquid dominance is complete!\n" +
+                "All other forces have dispersed, diluted, or gone inert.\n" +
+                "The board is yours, and your name shall be etched in the annals of chemical conquest.\n\n" +
+                "Or at least, until the next match. Well played!";
     }
-
 }

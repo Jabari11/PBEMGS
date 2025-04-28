@@ -50,8 +50,8 @@ public class GoMokuBoard {
     }
 
     /**
-     *  Validate a move for the symbol.  Returns an error message string if there is
-     *  an error, or null if the move is valid.
+     * Validate a move for the symbol.  Returns an error message string if there is
+     * an error, or null if the move is valid.
      */
     public String validateMove(Location square) {
         if (!isOnBoard(square)) {
@@ -110,8 +110,8 @@ public class GoMokuBoard {
     }
 
     /**
-     *  Execute the move - assumed validated already.
-     *  Returns true if a piece was captured.
+     * Execute the move - assumed validated already.
+     * Returns true if a piece was captured.
      */
     public void makeMove(char symbol, Location move) {
         grid[move.row()][move.col()] = symbol;
@@ -134,7 +134,7 @@ public class GoMokuBoard {
     }
 
     /**
-     *  Generates the board text.  Large board, put grid coords on all 4 sides.
+     * Generates the board text.  Large board, put grid coords on all 4 sides.
      */
     public String getBoardTextBody() {
         StringBuilder sb = new StringBuilder("    ");

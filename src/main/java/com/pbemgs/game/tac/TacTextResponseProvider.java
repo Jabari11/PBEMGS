@@ -49,7 +49,7 @@ public class TacTextResponseProvider {
 
     public static String getMoveFailedParseText(String error) {
         return "Your move email in the tutorial Tac game failed to parse with the following error:\n" +
-                error +"\n\n" +
+                error + "\n\n" +
                 "The body of the move command email for Tac should just be a single number between 1 and 9.\n" +
                 "(Trailing text is fine, as long as the first thing in the email body is the move information!)\n\n" +
                 "Example:\n" +

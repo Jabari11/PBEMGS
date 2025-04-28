@@ -1,1 +1,5 @@
 mvn exec:java -Dexec.mainClass="com.pbemgs.Simulator" -Dexec.classpathScope=runtime
+
+mvn exec:java -Dexec.mainClass="com.pbemgs.SimulatorLongLines" -Dexec.classpathScope=runtime
+
+mvn exec:java -Dexec.mainClass="com.pbemgs.RpgCombatSim" -Dexec.classpathScope=runtime

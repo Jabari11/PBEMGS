@@ -34,18 +34,18 @@ public class GoMokuGameDKO {
     }
 
     // Get all active games for a user (OPEN or IN_PROGRESS)
-    public List<GomokuGamesRecord> getActiveGamesForUser(Long playerId) {
+    public List<GomokuGamesRecord> getActiveGamesForUser(Long UserId) {
         return dslContext.selectFrom(GOMOKU_GAMES)
                 .where(GOMOKU_GAMES.GAME_STATE.in(GomokuGamesGameState.OPEN, GomokuGamesGameState.IN_PROGRESS)
-                        .and(GOMOKU_GAMES.X_PLAYER_ID.eq(playerId).or(GOMOKU_GAMES.O_PLAYER_ID.eq(playerId))))
+                        .and(GOMOKU_GAMES.X_USER_ID.eq(UserId).or(GOMOKU_GAMES.O_USER_ID.eq(UserId))))
                 .fetchInto(GomokuGamesRecord.class);
     }
 
     // Create a new game
-    public Long createNewGame(Long xPlayerId, String boardState, int boardSize) {
+    public Long createNewGame(Long xUserId, String boardState, int boardSize) {
         GomokuGamesRecord record = dslContext.newRecord(GOMOKU_GAMES);
         record.setGameState(GomokuGamesGameState.OPEN);
-        record.setXPlayerId(xPlayerId);
+        record.setXUserId(xUserId);
         record.setBoardState(boardState);
         record.setBoardSize(boardSize);
         record.setLastMoveTimestamp(LocalDateTime.now());
@@ -55,13 +55,13 @@ public class GoMokuGameDKO {
         return record.getGameId();
     }
 
-    // Complete game creation by setting both player IDs (could swap from creator), and the swap2 state
-    public void completeGameCreation(Long gameId, Long xPlayerId, Long oPlayerId) {
+    // Complete game creation by setting both User IDs (could swap from creator), and the swap2 state
+    public void completeGameCreation(Long gameId, Long xUserId, Long oUserId) {
         dslContext.update(GOMOKU_GAMES)
                 .set(GOMOKU_GAMES.GAME_STATE, GomokuGamesGameState.IN_PROGRESS)
-                .set(GOMOKU_GAMES.X_PLAYER_ID, xPlayerId)
-                .set(GOMOKU_GAMES.O_PLAYER_ID, oPlayerId)
-                .set(GOMOKU_GAMES.PLAYER_ID_TO_MOVE, xPlayerId)
+                .set(GOMOKU_GAMES.X_USER_ID, xUserId)
+                .set(GOMOKU_GAMES.O_USER_ID, oUserId)
+                .set(GOMOKU_GAMES.USER_ID_TO_MOVE, xUserId)
                 .set(GOMOKU_GAMES.SWAP2_STATE, GomokuGamesSwap2State.AWAITING_INITIAL_PLACEMENT)
                 .where(GOMOKU_GAMES.GAME_ID.eq(gameId))
                 .execute();
@@ -78,9 +78,8 @@ public class GoMokuGameDKO {
                 .set(GOMOKU_GAMES.GAME_STATE, gameRecord.getGameState())
                 .set(GOMOKU_GAMES.BOARD_STATE, gameRecord.getBoardState())
                 .set(GOMOKU_GAMES.SWAP2_STATE, gameRecord.getSwap2State())
-                .set(GOMOKU_GAMES.PLAYER_ID_TO_MOVE, gameRecord.getPlayerIdToMove())
+                .set(GOMOKU_GAMES.USER_ID_TO_MOVE, gameRecord.getUserIdToMove())
                 .set(GOMOKU_GAMES.LAST_MOVE_TIMESTAMP, gameRecord.getLastMoveTimestamp())
-                .set(GOMOKU_GAMES.VICTOR_PLAYER_ID, gameRecord.getVictorPlayerId())
                 .set(GOMOKU_GAMES.LAST_REMINDER_TIMESTAMP, gameRecord.getLastMoveTimestamp())
                 .where(GOMOKU_GAMES.GAME_ID.eq(gameRecord.getGameId()))
                 .execute();
@@ -93,7 +92,7 @@ public class GoMokuGameDKO {
     public void updateReminderTimestamps(Set<Long> userIds, LocalDateTime updateTo) {
         dslContext.update(GOMOKU_GAMES)
                 .set(GOMOKU_GAMES.LAST_REMINDER_TIMESTAMP, updateTo)
-                .where(GOMOKU_GAMES.PLAYER_ID_TO_MOVE.in(userIds))
+                .where(GOMOKU_GAMES.USER_ID_TO_MOVE.in(userIds))
                 .execute();
     }
 

@@ -171,7 +171,7 @@ public class NinetacBoard {
         for (int boardGroup = 0; boardGroup < 3; ++boardGroup) {
             for (int row = 0; row < 3; ++row) {
                 sb.append(boards.get(firstBoard).getRowTextString(row)).append(boardSpacer)
-                    .append(boards.get(firstBoard + 1).getRowTextString(row)).append(boardSpacer)
+                        .append(boards.get(firstBoard + 1).getRowTextString(row)).append(boardSpacer)
                         .append(boards.get(firstBoard + 2).getRowTextString(row));
                 sb.append("\n");
                 if (row <= 1) {

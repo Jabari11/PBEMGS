@@ -51,28 +51,22 @@ public class GoMokuTextResponseProvider {
                 " - Max simultaneous games per player: 3\n" +
                 " - Max open games: 8\n" +
                 " - Reminder: Players are nudged after 24 hours of inactivity.\n" +
-                " - Auto-Move: A random stone is placed after 4 days (96 hours) — **only in normal gameplay phase.\n\n" +
+                " - Auto-Move: A random stone is placed after 3 days (72 hours) — only in normal gameplay phase.\n\n" +
                 "Status:\n" +
-                " - Available - In final testing!  Five in a row wins. Questions? Send 'feedback'!";
+                " - Available!  Five in a row wins. Questions? Send 'feedback'!";
     }
 
     public static String getNoOpenGamesText() {
-        return "There are currently no open GoMoku games to join - use 'create_game gomoku' to create one!";
+        return "There are currently no open GoMoku games to join - use 'create_game gomoku' to create one!\n";
     }
 
     public static String getOpenGamesHeaderText(int count) {
         return "There are " + count + " currently open GoMoku games.\n" +
-                "Use 'join_game gomoku [game_id]' to join one of the following:\n\n";
+                "Use 'join_game gomoku [game_id]' to join one of the following:\n";
     }
 
     public static String getOpenGameDescription(Long gameId, UsersRecord usersRecord) {
         return "- Game ID: " + gameId.toString() + " - Created By: " + usersRecord.getHandle() + "\n";
-    }
-
-    public static String getMoveNotActiveText(long gameId) {
-        return "You requested a move in GoMoku game ID " + gameId + ".\n" +
-                "It is either your opponent's turn, or this isn't a game you are part of.\n\n" +
-                "Use 'my_games gomoku' to get the list of games you are a part of and the current player!";
     }
 
     public static String getMoveInvalidForStateText(long gameId, String stateError) {
@@ -87,18 +81,6 @@ public class GoMokuTextResponseProvider {
     public static String getMoveInvalidText(Location move, long gameId, String errorMessage) {
         return "You attempted to place a stone at " + move.toString() + " in GoMoku Game ID: " + gameId + ".\n" +
                 "This move is not valid.  Error message: " + errorMessage;
-    }
-
-    public static String getStatusFailedNoGameText(long gameId) {
-        return "You requested status for GoMoku game id " + gameId + ".\n" +
-                "This game id either doesn't exist or hasn't started.\n\n" +
-                "Use 'my_games gomoku' to get a list of the games you are a part of!";
-    }
-
-    public static String getStatusFailedNotYourGameText(long gameId) {
-        return "You requested status for GoMoku game id " + gameId + ".\n" +
-                "You are not a player in this game, so the command is not allowed.\n\n" +
-                "Use 'my_games gomoku' to get a list of the games you are a part of!";
     }
 
     public static String getGameHeader(GomokuGamesRecord game, String topSymbol, String topHandle, boolean topActive,

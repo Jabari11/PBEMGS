@@ -1,0 +1,2 @@
+ActionAdjustResource,friendly,targetType,splashCount,chanceToHit,resource,quantity,condition
+GAIN_1_FOCUS,yes,SELF_AFTER_HIT,0,200,FOCUS,1,

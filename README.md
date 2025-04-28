@@ -10,7 +10,7 @@ Tools:
 - IntelliJ
 - Maven
 - Eclipse Temurin (JDK/JRE)
-- draw.io (System Design/UML diagrams)
+- draw.io (AWS Block Diagram/UML diagrams)
 
 AWS Services used:
 - RDS (relational DB) - Aurora
@@ -26,13 +26,16 @@ Libraries:
 - JOOQ (DB interface)
 - MySql connector
 - Sun Mail (SMTP, MIME)
+- Google Guava
 - JUnit/Mockito (unit test)
 
 TODOs:
-- Refactor standard error message handling on ninetac and ataxx
-- ninetac/ataxx - add/remove logging as appropriate.
-- ninetac/ataxx - convert throw to assert as appropriate.
+- all games - add/remove logging as appropriate.
+- all games - convert throw to assert as appropriate.
 - surge: new maps
 - surge: balance testing (max edge capacity, initial gate open capacity, etc)
+- ataxx: standard board creation options
+- triad: Same/Plus?
 - controller: implement deactivate/activate
 - controller/games: Implement a resign-game function/command chain (resign, confirm)
+- controller - add stats command (my_results <gamename>, game_results <gamename>, leaderboards)

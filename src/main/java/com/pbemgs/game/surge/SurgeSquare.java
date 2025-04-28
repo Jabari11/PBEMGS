@@ -41,9 +41,18 @@ public class SurgeSquare {
         return new Location(row, col);
     }
 
-    public int getPlayerNum() { return playerNum; }
-    public int getQuantity() { return quantity; }
-    public boolean isObstacle() {return isObstacle; }
+    public int getPlayerNum() {
+        return playerNum;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public boolean isObstacle() {
+        return isObstacle;
+    }
+
     public boolean isGateOpen(SurgeDirection dir) {
         return gates.getOrDefault(dir, false);
     }
@@ -122,7 +131,7 @@ public class SurgeSquare {
     }
 
     /**
-     *  Non-color display for the cell.
+     * Non-color display for the cell.
      */
     public String toTextDisplay() {
         if (quantity == 0) {

@@ -30,3 +30,4 @@ bin/
 
 ### Complied Artifacts ###
 target/
+src/main/generated/

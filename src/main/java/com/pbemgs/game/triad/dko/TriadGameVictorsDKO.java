@@ -1,4 +1,4 @@
-package com.pbemgs.dko;
+package com.pbemgs.game.triad.dko;
 
 import org.jooq.DSLContext;
 import org.jooq.Record1;
@@ -6,27 +6,29 @@ import org.jooq.Record1;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.pbemgs.generated.tables.AtaxxVictors.ATAXX_VICTORS;
+import static com.pbemgs.generated.tables.TriadGameVictors.TRIAD_GAME_VICTORS;
 import static org.jooq.impl.DSL.count;
 import static org.jooq.impl.DSL.field;
 
-public class AtaxxVictorsDKO {
+public class TriadGameVictorsDKO {
     private final DSLContext dsl;
 
-    public AtaxxVictorsDKO(DSLContext dsl) {
+    public TriadGameVictorsDKO(DSLContext dsl) {
         this.dsl = dsl;
     }
 
     /**
      * Inserts a winner into the Ataxx victors table.
      *
-     * @param gameId   The game ID.
-     * @param playerId The player ID who won the game.
+     * @param gameId The game ID.
+     * @param userId The player ID who won the game.
      */
-    public void addVictor(long gameId, long playerId) {
-        dsl.insertInto(ATAXX_VICTORS)
-                .set(ATAXX_VICTORS.GAME_ID, gameId)
-                .set(ATAXX_VICTORS.PLAYER_ID, playerId)
+    public void addVictor(long gameId, long userId, int subgame, long firstPlayerUserId) {
+        dsl.insertInto(TRIAD_GAME_VICTORS)
+                .set(TRIAD_GAME_VICTORS.GAME_ID, gameId)
+                .set(TRIAD_GAME_VICTORS.USER_ID, userId)
+                .set(TRIAD_GAME_VICTORS.SUBGAME_ID, subgame)
+                .set(TRIAD_GAME_VICTORS.FIRST_PLAYER_WON, firstPlayerUserId == userId)
                 .execute();
     }
 
@@ -37,9 +39,9 @@ public class AtaxxVictorsDKO {
      * @return List of player IDs who won the game.
      */
     public List<Long> getVictorsForGame(long gameId) {
-        return dsl.select(ATAXX_VICTORS.PLAYER_ID)
-                .from(ATAXX_VICTORS)
-                .where(ATAXX_VICTORS.GAME_ID.eq(gameId))
+        return dsl.select(TRIAD_GAME_VICTORS.USER_ID)
+                .from(TRIAD_GAME_VICTORS)
+                .where(TRIAD_GAME_VICTORS.GAME_ID.eq(gameId))
                 .fetchInto(Long.class);
     }
 
@@ -51,8 +53,8 @@ public class AtaxxVictorsDKO {
      */
     public int getTotalWinsForPlayer(long playerId) {
         return dsl.fetchCount(
-                dsl.selectFrom(ATAXX_VICTORS)
-                        .where(ATAXX_VICTORS.PLAYER_ID.eq(playerId))
+                dsl.selectFrom(TRIAD_GAME_VICTORS)
+                        .where(TRIAD_GAME_VICTORS.USER_ID.eq(playerId))
         );
     }
 
@@ -63,13 +65,13 @@ public class AtaxxVictorsDKO {
      * @return List of player ID and their win count.
      */
     public List<PlayerWinCount> getTopPlayers(int limit) {
-        return dsl.select(ATAXX_VICTORS.PLAYER_ID, count().as("win_count"))
-                .from(ATAXX_VICTORS)
-                .groupBy(ATAXX_VICTORS.PLAYER_ID)
+        return dsl.select(TRIAD_GAME_VICTORS.USER_ID, count().as("win_count"))
+                .from(TRIAD_GAME_VICTORS)
+                .groupBy(TRIAD_GAME_VICTORS.USER_ID)
                 .orderBy(field("win_count").desc())
                 .limit(limit)
                 .fetch()
-                .map(r -> new PlayerWinCount(r.get(ATAXX_VICTORS.PLAYER_ID), r.get("win_count", Integer.class)));
+                .map(r -> new PlayerWinCount(r.get(TRIAD_GAME_VICTORS.USER_ID), r.get("win_count", Integer.class)));
     }
 
     /**
@@ -78,9 +80,9 @@ public class AtaxxVictorsDKO {
      * @return List of game IDs that had multiple winners.
      */
     public List<Long> getTiedGames() {
-        return dsl.select(ATAXX_VICTORS.GAME_ID)
-                .from(ATAXX_VICTORS)
-                .groupBy(ATAXX_VICTORS.GAME_ID)
+        return dsl.select(TRIAD_GAME_VICTORS.GAME_ID)
+                .from(TRIAD_GAME_VICTORS)
+                .groupBy(TRIAD_GAME_VICTORS.GAME_ID)
                 .having(count().gt(1))
                 .fetch()
                 .stream()

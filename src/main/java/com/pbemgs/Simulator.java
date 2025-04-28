@@ -1,6 +1,5 @@
 package com.pbemgs;
 
-import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.game.surge.Surge;
 import com.pbemgs.game.surge.SurgeBoard;
 import com.pbemgs.game.surge.SurgeCommand;
@@ -18,15 +17,15 @@ public class Simulator {
         TestLogger mockLogger = new TestLogger();
 
         SurgeBoard.Coeffs ORIG_COEFFS = new SurgeBoard.Coeffs(1.0f, 1.0f,
-                0.7f, 0.5f, 300, 250, 3,0.33f, 0.75f,
+                0.7f, 0.5f, 300, 250, 3, 0.33f, 0.75f,
                 100, 800, 10);
 
         String flowBoardState =
                 "0:0:CC,0:0:CC,1000:2:OO,1000:2:OO,1000:2:CO|" +
-                "0:0:CC,0:0:CC,500:2:OC,500:2:OC,500:2:CC|" +
-                "0:0:CC,0:0:CC,0:0:CC,0:0:CC,0:0:CC|" +
-                "0:0:CO,0:0:CC,0:0:CC,0:0:CC,0:0:CC|" +
-                "1000:1:OC,0:0:CC,0:0:CC,0:0:CC,0:0:CC";
+                        "0:0:CC,0:0:CC,500:2:OC,500:2:OC,500:2:CC|" +
+                        "0:0:CC,0:0:CC,0:0:CC,0:0:CC,0:0:CC|" +
+                        "0:0:CO,0:0:CC,0:0:CC,0:0:CC,0:0:CC|" +
+                        "1000:1:OC,0:0:CC,0:0:CC,0:0:CC,0:0:CC";
 
         String flowGeyserState = "A5:H,E1:H,E5:M";
         SurgeBoard board1 = new SurgeBoard(5, 5, SurgeBoard.PROD_COEFFS, mockLogger);

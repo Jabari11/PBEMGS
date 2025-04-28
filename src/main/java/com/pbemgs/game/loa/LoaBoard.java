@@ -46,7 +46,7 @@ public class LoaBoard {
      * Creates a new game - LOA initial board has a set state.
      */
     public void createNewGame() {
-        for (int x = 1; x <= 6 ; ++x) {
+        for (int x = 1; x <= 6; ++x) {
             grid[0][x] = PLAYER_O;
             grid[7][x] = PLAYER_O;
             grid[x][0] = PLAYER_X;
@@ -68,8 +68,8 @@ public class LoaBoard {
     }
 
     /**
-     *  Validate a move for the symbol.  Returns an error message string if there is
-     *  an error, or null if the move is valid.
+     * Validate a move for the symbol.  Returns an error message string if there is
+     * an error, or null if the move is valid.
      */
     public String validateMove(Location from, Location to, char symbol) {
         if (!isOnBoard(from)) {
@@ -140,8 +140,8 @@ public class LoaBoard {
     }
 
     /**
-     *  Execute the move - assumed validated already.
-     *  Returns true if a piece was captured.
+     * Execute the move - assumed validated already.
+     * Returns true if a piece was captured.
      */
     public boolean makeMove(char symbol, LinesOfAction.LoaMove move) {
         boolean capture = grid[move.to().row()][move.to().col()] != EMPTY;
@@ -196,8 +196,9 @@ public class LoaBoard {
         }
         return count;
     }
+
     /**
-     *  Generates the board text.
+     * Generates the board text.
      */
     public String getBoardTextBody() {
         StringBuilder sb = new StringBuilder("    ");
@@ -234,8 +235,8 @@ public class LoaBoard {
     }
 
     /**
-     *  Return a count of the number of pieces connected (8 directions) to this one.
-     *  This is the victory condition check (connected == total)
+     * Return a count of the number of pieces connected (8 directions) to this one.
+     * This is the victory condition check (connected == total)
      */
     private int countConnectedPieces(char symbol, Location loc) {
         Set<Location> group = new HashSet<>();  // grouped pieces with this one

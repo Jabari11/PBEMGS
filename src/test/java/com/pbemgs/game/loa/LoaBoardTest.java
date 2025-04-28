@@ -24,14 +24,15 @@ public class LoaBoardTest {
 
     private String testBoardString() {
         return ".XX...X.|" +
-               "........|" +
-               "...OXX.O|" +
-               "..OOX..O|" +
-               "........|" +
-               "O..XO.O.|" +
-               "..O....X|" +
-               ".X..X...";
+                "........|" +
+                "...OXX.O|" +
+                "..OOX..O|" +
+                "........|" +
+                "O..XO.O.|" +
+                "..O....X|" +
+                ".X..X...";
     }
+
     @Test
     public void testCreateNewGame_initialSetup() {
         board.createNewGame();

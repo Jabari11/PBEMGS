@@ -61,7 +61,8 @@ public class SESEmailSender {
             MimeBodyPart htmlPart = new MimeBodyPart();
 
             String htmlContent = "<html><head><meta charset=\"UTF-8\"></head>" +
-            "<body style=\"font-family: 'Courier New', Courier, Consolas, 'Lucida Console', 'DejaVu Sans Mono', monospace;\"><pre>" + plainTextBody + "</pre></body></html>";
+                    "<body style=\"font-family: Menlo, 'Courier New', Courier, Consolas, 'Lucida Console', 'DejaVu Sans Mono', monospace;\"><pre>" +
+                    plainTextBody + "</pre></body></html>";
             htmlPart.setContent(htmlContent, "text/html; charset=UTF-8");
 
             MimeMultipart multipart = new MimeMultipart("alternative");

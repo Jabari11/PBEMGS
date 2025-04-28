@@ -3,18 +3,21 @@ package com.pbemgs.game.ataxx;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.controller.SESEmailSender;
 import com.pbemgs.dko.AtaxxGameDKO;
-import com.pbemgs.dko.AtaxxVictorsDKO;
+import com.pbemgs.dko.PlayerOutcomesDKO;
 import com.pbemgs.dko.UsersDKO;
 import com.pbemgs.game.GameInterface;
 import com.pbemgs.game.GameMessageMailer;
-import com.pbemgs.game.OptionParser;
+import com.pbemgs.game.GameTextUtilities;
 import com.pbemgs.generated.enums.AtaxxGamesBoardOption;
 import com.pbemgs.generated.enums.AtaxxGamesGameState;
+import com.pbemgs.generated.enums.PlayerOutcomesOutcome;
 import com.pbemgs.generated.tables.records.AtaxxGamesRecord;
 import com.pbemgs.generated.tables.records.UsersRecord;
+import com.pbemgs.model.GameType;
 import com.pbemgs.model.Location;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import software.amazon.awssdk.utils.Pair;
 
 import java.time.Duration;
@@ -36,27 +39,26 @@ import java.util.stream.Stream;
  * is in AtaxxBoard, and the text strings are mostly in the text response provider.
  * Terminology notes:
  * - A "player slot" is the slot in the join order (0, 1) or (0-3) - this also gives their piece
- *   representation.  Turn order is independent though.
+ * representation.  Turn order is independent though.
  */
 public class Ataxx implements GameInterface {
-
-    private static final String GAME_NAME = "ataxx";
     private static final int PLAYER_GAME_LIMIT = 5;
     private static final int MAX_OPEN_GAMES = 15;
     private final Duration REMINDER_DURATION = Duration.ofHours(24);
     private final Duration TIMEOUT_DURATION = Duration.ofHours(72);
 
 
+    private final DSLContext dslContext;
     private final AtaxxGameDKO ataxxDKO;
-    private final AtaxxVictorsDKO ataxxVictorDKO;
     private final UsersDKO usersDKO;
     private final LambdaLogger logger;
 
-    private record TextBodyParseResult(Location from, Location to, boolean success, String error) {}
+    private record TextBodyParseResult(Location from, Location to, boolean success, String error) {
+    }
 
     public Ataxx(DSLContext dslContext, LambdaLogger logger) {
+        this.dslContext = dslContext;
         ataxxDKO = new AtaxxGameDKO(dslContext);
-        ataxxVictorDKO = new AtaxxVictorsDKO(dslContext);
         usersDKO = new UsersDKO(dslContext);
         this.logger = logger;
     }
@@ -65,24 +67,23 @@ public class Ataxx implements GameInterface {
     public void processCreateGame(UsersRecord user, S3Email email, SESEmailSender emailSender) {
         List<AtaxxGamesRecord> userGames = ataxxDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "create_game", GameType.ATAXX);
             return;
         }
 
         List<AtaxxGamesRecord> openGames = ataxxDKO.getOpenGames();
         if (openGames.size() >= MAX_OPEN_GAMES) {
-            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GAME_NAME);
+            GameMessageMailer.openGamesLimitReached(emailSender, user.getEmailAddr(), GameType.ATAXX);
             return;
         }
 
         try {
-            Map<String, String> options = OptionParser.parseOptions(email.getEmailBodyText(logger));
+            Map<String, String> options = GameTextUtilities.parseOptions(email.getEmailBodyText(logger));
             logger.log("-- Options read: " + options.toString());
-            boolean validOptions = validateOptions(options);
-            if (!validOptions) {
+            String optionValidationError = validateOptions(options);
+            if (optionValidationError != null) {
                 logger.log("Game creation failed: Invalid options.");
-                emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - CREATE_GAME ATAXX failed (options)",
-                        AtaxxTextResponseProvider.getBadOptionsText());
+                GameMessageMailer.createOptionsInvalid(emailSender, user.getEmailAddr(), GameType.ATAXX, optionValidationError);
                 return;
             }
 
@@ -96,7 +97,7 @@ public class Ataxx implements GameInterface {
             newBoard.createInitialBoard(players, boardType);
             String turnOrder = generateTurnOrderString(players);
             long gameId = ataxxDKO.createNewGame(user.getUserId(), players, turnOrder, boardSize, newBoard.serialize(), boardType);
-            GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.createSuccess(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         } catch (Exception e) {
             logger.log("Exception parsing options from create_game text body: " + e.getMessage());
@@ -110,20 +111,20 @@ public class Ataxx implements GameInterface {
     public void processJoinGame(UsersRecord user, long gameId, SESEmailSender emailSender) {
         List<AtaxxGamesRecord> userGames = ataxxDKO.getActiveGamesForUser(user.getUserId());
         if (userGames.size() >= PLAYER_GAME_LIMIT) {
-            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GAME_NAME);
+            GameMessageMailer.gameLimitReached(emailSender, user.getEmailAddr(), "join_game", GameType.ATAXX);
             return;
         }
         AtaxxGamesRecord requestGame = ataxxDKO.getGameById(gameId);
 
         if (requestGame == null || requestGame.getGameState() != AtaxxGamesGameState.OPEN) {
-            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.joinNonopenGame(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
 
-        if (Objects.equals(requestGame.getPlayer0Id(), user.getUserId()) ||
-            Objects.equals(requestGame.getPlayer1Id(), user.getUserId()) ||
-            Objects.equals(requestGame.getPlayer2Id(), user.getUserId())) {
-            GameMessageMailer.joinSelf(emailSender, user.getEmailAddr(), GAME_NAME);
+        if (Objects.equals(requestGame.getUser0Id(), user.getUserId()) ||
+                Objects.equals(requestGame.getUser1Id(), user.getUserId()) ||
+                Objects.equals(requestGame.getUser2Id(), user.getUserId())) {
+            GameMessageMailer.joinAlreadyIn(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
 
@@ -133,7 +134,7 @@ public class Ataxx implements GameInterface {
         if (starting) {
             List<Integer> turnOrder = parseTurnOrderString(requestGame.getTurnOrder());
             int firstTurn = turnOrder.get(0);
-            requestGame.setPlayerIdToMove(playerList.get(firstTurn).getUserId());
+            requestGame.setUserIdToMove(playerList.get(firstTurn).getUserId());
             if (requestGame.getNumPlayers() == 2) {
                 ataxxDKO.completeGameCreation2P(gameId, user.getUserId(), playerList.get(firstTurn).getUserId());
             } else {
@@ -147,8 +148,7 @@ public class Ataxx implements GameInterface {
                     playerList.get(firstTurn).getHandle() + " has the first move.\n\n", playerList, turnOrder);
         } else {
             ataxxDKO.addPlayerToGame(gameId, user.getUserId());
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - JOIN_GAME ATAXX command successful!",
-                    AtaxxTextResponseProvider.getJoinSuccessText(gameId));
+            GameMessageMailer.joinSuccess(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
         }
     }
 
@@ -157,18 +157,17 @@ public class Ataxx implements GameInterface {
         AtaxxGamesRecord game = ataxxDKO.getGameById(gameId);
 
         if (game == null || game.getGameState() != AtaxxGamesGameState.IN_PROGRESS) {
-            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+            GameMessageMailer.moveGameNotValid(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
-        if (!Objects.equals(game.getPlayerIdToMove(), user.getUserId())) {
-            GameMessageMailer.getMoveNotActiveText(emailSender, user.getEmailAddr(), GAME_NAME, gameId);
+        if (!Objects.equals(game.getUserIdToMove(), user.getUserId())) {
+            GameMessageMailer.moveNotActiveText(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
 
         TextBodyParseResult move = parseMoveFromEmail(email);
         if (!move.success()) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE ATAXX failed",
-                    AtaxxTextResponseProvider.getMoveFailedParseText(gameId, move.error()));
+            GameMessageMailer.moveFailedToParse(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId, move.error());
             return;
         }
 
@@ -199,7 +198,7 @@ public class Ataxx implements GameInterface {
             return AtaxxTextResponseProvider.getNoOpenGamesText();
         }
         Set<Long> playerIds = openGames.stream()
-                .flatMap(game -> Stream.of(game.getPlayer0Id(), game.getPlayer1Id(), game.getPlayer2Id())) // Gather all player IDs
+                .flatMap(game -> Stream.of(game.getUser0Id(), game.getUser1Id(), game.getUser2Id())) // Gather all player IDs
                 .filter(Objects::nonNull) // Remove nulls
                 .collect(Collectors.toSet()); // Collect into a set (removes duplicates)
         Map<Long, UsersRecord> usersById = usersDKO.fetchUsersByIds(playerIds);
@@ -231,7 +230,7 @@ public class Ataxx implements GameInterface {
                 sb.append(" is waiting for opponent(s).\n");
             } else {
                 sb.append(" is in progress - ");
-                sb.append(game.getPlayerIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
+                sb.append(game.getUserIdToMove() == userId ? "YOUR TURN!\n" : "opponent's turn.\n");
             }
         }
         return sb.toString();
@@ -241,28 +240,25 @@ public class Ataxx implements GameInterface {
     public void processStatus(UsersRecord user, long gameId, SESEmailSender emailSender) {
         // Validate part of game
         AtaxxGamesRecord reqGame = ataxxDKO.getGameById(gameId);
-        if (reqGame == null || reqGame.getGameState() == AtaxxGamesGameState.OPEN ||
-                reqGame.getGameState() == AtaxxGamesGameState.ABANDONED) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    AtaxxTextResponseProvider.getStatusFailedNoGameText(gameId));
+        if (reqGame == null || reqGame.getGameState() == AtaxxGamesGameState.OPEN) {
+            GameMessageMailer.statusNotValidGame(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
-        if (!Objects.equals(user.getUserId(), reqGame.getPlayer0Id()) &&
-                !Objects.equals(user.getUserId(), reqGame.getPlayer1Id()) &&
-                !Objects.equals(user.getUserId(), reqGame.getPlayer2Id()) &&
-                !Objects.equals(user.getUserId(), reqGame.getPlayer3Id())) {
-            emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - STATUS command failed",
-                    AtaxxTextResponseProvider.getStatusFailedNotYourGameText(gameId));
+        if (!Objects.equals(user.getUserId(), reqGame.getUser0Id()) &&
+                !Objects.equals(user.getUserId(), reqGame.getUser1Id()) &&
+                !Objects.equals(user.getUserId(), reqGame.getUser2Id()) &&
+                !Objects.equals(user.getUserId(), reqGame.getUser3Id())) {
+            GameMessageMailer.statusNotYourGame(emailSender, user.getEmailAddr(), GameType.ATAXX, gameId);
             return;
         }
 
         AtaxxBoard board = new AtaxxBoard(reqGame.getBoardSize(), logger);
         board.deserialize(reqGame.getBoardState());
-        List<UsersRecord> playerList = getPlayerList(reqGame);
+        List<UsersRecord> userList = getPlayerList(reqGame);
         int playerSlot = getUserPlayerSlot(user, reqGame);
 
         sendGameStateEmail(reqGame, board, emailSender, "PBEMGS - ATAXX Game Status for Game ID " + gameId,
-                "", playerList, List.of(playerSlot));
+                "", userList, List.of(playerSlot));
     }
 
     @Override
@@ -279,7 +275,7 @@ public class Ataxx implements GameInterface {
 
             if (Duration.between(lastMoveTime, currTime).compareTo(TIMEOUT_DURATION) > 0) {
                 try {
-                    UsersRecord user = usersDKO.fetchUserById(game.getPlayerIdToMove());
+                    UsersRecord user = usersDKO.fetchUserById(game.getUserIdToMove());
                     AtaxxBoard gameBoard = new AtaxxBoard(game.getBoardSize(), logger);
 
                     // Get a random move from the board and process it.
@@ -308,7 +304,7 @@ public class Ataxx implements GameInterface {
                 LocalDateTime lastTime = game.getLastReminderTimestamp() == null ?
                         game.getLastMoveTimestamp() : game.getLastReminderTimestamp();
                 if (Duration.between(lastTime, currTime).compareTo(REMINDER_DURATION) > 0) {
-                    staleStringByUserId.put(game.getPlayerIdToMove(), "ATAXX: Game ID " + game.getGameId());
+                    staleStringByUserId.put(game.getUserIdToMove(), "ATAXX: Game ID " + game.getGameId());
                 }
             }
         }
@@ -331,37 +327,7 @@ public class Ataxx implements GameInterface {
 
         // Check end of game (no more blank spots)
         if (gameBoard.isBoardFull()) {
-            game.setGameState(AtaxxGamesGameState.COMPLETE);
-
-            // Use a TreeMap to store scores -> list of player slots (since multiple can have same score)
-            TreeMap<Integer, List<Integer>> scoreToSlots = new TreeMap<>(Collections.reverseOrder());
-            for (int p = 0; p < game.getNumPlayers(); ++p) {
-                int score = gameBoard.getPieceCount(p);
-                scoreToSlots.computeIfAbsent(score, k -> new ArrayList<>()).add(p);
-            }
-
-            // Get the highest score entry
-            List<Integer> highestScoreSlots = scoreToSlots.firstEntry().getValue();
-
-            // Convert player slots to user IDs and handles
-            List<Long> highestScoreUserIds = highestScoreSlots.stream()
-                    .map(slot -> playerList.get(slot).getUserId())
-                    .toList();
-            List<String> highestScoreHandles = highestScoreSlots.stream()
-                    .map(slot -> playerList.get(slot).getHandle())
-                    .toList();
-
-            boolean drawn = highestScoreUserIds.size() == game.getNumPlayers();
-            if (!drawn) {
-                for (Long uid : highestScoreUserIds) {
-                    ataxxVictorDKO.addVictor(game.getGameId(), uid);
-                }
-            }
-            ataxxDKO.updateGame(game);
-            String subjectEnd = drawn ? "Game is a draw!" : "Winner: " + String.join(", ", highestScoreHandles);
-            sendGameStateEmail(game, gameBoard, emailSender,
-                    "PBEMGS - ATAXX Game # " + game.getGameId() + " is Complete. " + subjectEnd, moveString + "\n\nBoard is full, game is over.\n\n",
-                    playerList, turnOrder);
+            executeEndOfGame(emailSender, game, gameBoard, moveString, playerList, turnOrder);
             return;
         }  // end if (end of game)
 
@@ -372,7 +338,7 @@ public class Ataxx implements GameInterface {
             currPlayerIndex = (currPlayerIndex + 1) % turnOrder.size();
             int currPlayerSlot = turnOrder.get(currPlayerIndex);
             if (gameBoard.hasLegalMove(currPlayerSlot)) {
-                game.setPlayerIdToMove(playerList.get(currPlayerSlot).getUserId());
+                game.setUserIdToMove(playerList.get(currPlayerSlot).getUserId());
                 game.setLastMoveTimestamp(LocalDateTime.now());
                 ataxxDKO.updateGame(game);
 
@@ -398,19 +364,77 @@ public class Ataxx implements GameInterface {
         }
     }
 
-    /** Return a list of the player records, in slot order */
+    private void executeEndOfGame(SESEmailSender emailSender, AtaxxGamesRecord game, AtaxxBoard gameBoard,
+                                  String moveHeader, List<UsersRecord> playerList, List<Integer> turnOrder) {
+        game.setGameState(AtaxxGamesGameState.COMPLETE);
+
+        // Use a TreeMap to store scores -> list of player slots (sorted in descending order)
+        TreeMap<Integer, List<Integer>> scoreToSlots = new TreeMap<>(Collections.reverseOrder());
+        for (int p = 0; p < game.getNumPlayers(); ++p) {
+            int score = gameBoard.getPieceCount(p);
+            scoreToSlots.computeIfAbsent(score, k -> new ArrayList<>()).add(p);
+        }
+
+        // Determine outcomes and place rankings
+        boolean isDraw = scoreToSlots.size() == 1 && scoreToSlots.firstEntry().getValue().size() == game.getNumPlayers();
+        List<Integer> highestScoreSlots = scoreToSlots.firstEntry().getValue();
+        List<String> highestScoreHandles = highestScoreSlots.stream()
+                .map(slot -> playerList.get(slot).getHandle())
+                .toList();
+
+        // Perform updates and inserts in a transaction
+        dslContext.transaction(configuration -> {
+            DSLContext txn = DSL.using(configuration);
+            AtaxxGameDKO txAtaxxDKO = new AtaxxGameDKO(txn);
+            PlayerOutcomesDKO txOutcomesDKO = new PlayerOutcomesDKO(txn);
+
+            // Update the game state
+            txAtaxxDKO.updateGame(game);
+
+            // Insert outcomes for all players with place rankings
+            int place = 1; // Start with 1st place
+            for (Map.Entry<Integer, List<Integer>> entry : scoreToSlots.entrySet()) {
+                List<Integer> slots = entry.getValue();
+                PlayerOutcomesOutcome outcome;
+                if (isDraw) {
+                    outcome = PlayerOutcomesOutcome.DRAW;
+                } else if (entry.getKey().equals(scoreToSlots.firstKey())) {
+                    outcome = PlayerOutcomesOutcome.WIN; // Top score(s) get a win
+                } else {
+                    outcome = PlayerOutcomesOutcome.LOSS; // All others lose
+                }
+
+                for (Integer slot : slots) {
+                    Long userId = playerList.get(slot).getUserId();
+                    Boolean wentFirst = turnOrder.get(0).equals(slot); // First in turnOrder went first
+                    txOutcomesDKO.insertOutcome(GameType.ATAXX, game.getGameId(), userId, outcome, place, wentFirst);
+                }
+                place += slots.size();
+            }
+        });
+
+        String subjectEnd = isDraw ? "Game is a draw!" : "Winner: " + String.join(", ", highestScoreHandles);
+        sendGameStateEmail(game, gameBoard, emailSender,
+                "PBEMGS - ATAXX Game # " + game.getGameId() + " is Complete. " + subjectEnd,
+                moveHeader + "\n\nBoard is full, game is over.\n\n",
+                playerList, turnOrder);
+    }
+
+    /**
+     * Return a list of the player records, in slot order
+     */
     private List<UsersRecord> getPlayerList(AtaxxGamesRecord game) {
         List<UsersRecord> players = new ArrayList<>();
         try {
-            players.add(usersDKO.fetchUserById(game.getPlayer0Id()));
-            if (game.getPlayer1Id() != null) {
-                players.add(usersDKO.fetchUserById(game.getPlayer1Id()));
+            players.add(usersDKO.fetchUserById(game.getUser0Id()));
+            if (game.getUser1Id() != null) {
+                players.add(usersDKO.fetchUserById(game.getUser1Id()));
             }
-            if (game.getPlayer2Id() != null) {
-                players.add(usersDKO.fetchUserById(game.getPlayer2Id()));
+            if (game.getUser2Id() != null) {
+                players.add(usersDKO.fetchUserById(game.getUser2Id()));
             }
-            if (game.getPlayer3Id() != null) {
-                players.add(usersDKO.fetchUserById(game.getPlayer3Id()));
+            if (game.getUser3Id() != null) {
+                players.add(usersDKO.fetchUserById(game.getUser3Id()));
             }
         } catch (Exception e) {
             logger.log("Ataxx::getPlayerList() failed, likely due to a non-existent user record. " + e.getMessage());
@@ -420,42 +444,42 @@ public class Ataxx implements GameInterface {
     }
 
     private int getUserPlayerSlot(UsersRecord user, AtaxxGamesRecord game) {
-        if (Objects.equals(user.getUserId(), game.getPlayer0Id())) {
+        if (Objects.equals(user.getUserId(), game.getUser0Id())) {
             return 0;
         }
-        if (Objects.equals(user.getUserId(), game.getPlayer1Id())) {
+        if (Objects.equals(user.getUserId(), game.getUser1Id())) {
             return 1;
         }
-        if (Objects.equals(user.getUserId(), game.getPlayer2Id())) {
+        if (Objects.equals(user.getUserId(), game.getUser2Id())) {
             return 2;
         }
-        if (Objects.equals(user.getUserId(), game.getPlayer3Id())) {
+        if (Objects.equals(user.getUserId(), game.getUser3Id())) {
             return 3;
         }
         logger.log("Ataxx::getUserPlayerSlot failed - user ID " + user.getUserId() + "is not a part of game id " + game.getGameId());
         throw new IllegalArgumentException("User ID not part of game!");
     }
 
-    private boolean validateOptions(Map<String, String> options) {
+    private String validateOptions(Map<String, String> options) {
         if (!options.containsKey("players") || !options.containsKey("size") || !options.containsKey("board")) {
             logger.log("-- create failed, missing required option(s).");
-            return false;
+            return "Missing required option(s).";
         }
 
         try {
             int players = Integer.parseInt(options.get("players"));
             if (players != 2 && players != 4) {
                 logger.log("-- create failed, invalid number of players.");
-                return false;
+                return "Invalid number of players (must be 2 or 4).";
             }
             int boardSize = Integer.parseInt(options.get("size"));
             if (boardSize < 7 || boardSize > 9) {
                 logger.log("-- create failed, invalid board size.");
-                return false;
+                return "Invalid board size (must be between 7 and 9).";
             }
         } catch (NumberFormatException e) {
             logger.log("-- create failed, invalid players and/or board size value (not a number).");
-            return false;
+            return "Text format error attempting to read numeric value.";
         }
 
         String boardType = options.get("board").toUpperCase();
@@ -463,10 +487,10 @@ public class Ataxx implements GameInterface {
             AtaxxGamesBoardOption.valueOf(boardType);
         } catch (IllegalArgumentException e) {
             logger.log("-- create failed, invalid board type.");
-            return false;
+            return "Invalid board type specified.";
         }
 
-        return true;
+        return null;
     }
 
     private String generateTurnOrderString(int numPlayers) {
@@ -555,7 +579,7 @@ public class Ataxx implements GameInterface {
                 UsersRecord player = playerList.get(slot);
                 char symbol = board.getPlayerSymbol(slot);
                 int pieceCount = board.getPieceCount(slot);
-                boolean isCurrentTurn = Objects.equals(gameRecord.getPlayerIdToMove(), player.getUserId());
+                boolean isCurrentTurn = Objects.equals(gameRecord.getUserIdToMove(), player.getUserId());
 
                 infoBlock.append("'").append(symbol).append("' (").append(String.format("%02d", pieceCount)).append(") - ")
                         .append(player.getHandle());

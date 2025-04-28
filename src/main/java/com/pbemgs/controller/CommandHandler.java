@@ -12,6 +12,8 @@ import com.pbemgs.model.GameType;
 import com.pbemgs.model.S3Email;
 import org.jooq.DSLContext;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +21,8 @@ import java.util.List;
 public class CommandHandler {
 
     private final LambdaLogger logger;
-    private DSLContext dslContext;
-    private UsersDKO usersDKO;
+    private final DSLContext dslContext;
+    private final UsersDKO usersDKO;
 
 
     public CommandHandler(DSLContext dslContext, LambdaLogger logger) {
@@ -125,7 +127,7 @@ public class CommandHandler {
             emailSender.sendEmail(from, "PBEMGS - TEST_DISPLAY",
                     TextResponseProvider.getTestDisplayHtmlTextBody());
         } catch (Exception e) {
-            logger.log("-- Exception in processTestDisplay: " + e.getMessage());
+            logger.log("-- Exception in processTestDisplay: " + getStackTrace(e));
             emailSender.sendEmail(from, "PBEMGS - TEST_DISPLAY Exception",
                     TextResponseProvider.getExceptionTextBody("test_display", e.getMessage()));
         }
@@ -162,7 +164,7 @@ public class CommandHandler {
             tutorial.createTutorialGame(user, emailSender);
             logger.log("-- Created the tutorial game successfully!");
         } catch (Exception e) {
-            logger.log("-- Exception in processCreateAccount: " + e.getMessage());
+            logger.log("-- Exception in processCreateAccount: " + getStackTrace(e));
             emailSender.sendEmail(from, "PBEMGS - CREATE_ACCOUNT Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -180,7 +182,7 @@ public class CommandHandler {
             emailSender.sendEmail(from, "PBEMGS - Rules for " + command.game().name(),
                     game.getRulesTextBody());
         } catch (Exception e) {
-            logger.log("-- Exception in processGameRulesRequest: " + e.getMessage());
+            logger.log("-- Exception in processGameRulesRequest: " + getStackTrace(e));
             emailSender.sendEmail(from, "PBEMGS - RULES Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -196,7 +198,7 @@ public class CommandHandler {
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - FEEDBACK received!",
                     TextResponseProvider.getFeedbackThanksText());
         } catch (Exception e) {
-            logger.log("-- Exception in processGameRulesRequest: " + e.getMessage());
+            logger.log("-- Exception in processGameRulesRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - FEEDBACK Exception",
                     TextResponseProvider.getExceptionTextBody("FEEDBACK", e.getMessage()));
         }
@@ -213,7 +215,7 @@ public class CommandHandler {
             GameInterface game = GameFactory.createGame(command.game(), dslContext, logger);
             game.processCreateGame(user, email, emailSender);
         } catch (Exception e) {
-            logger.log("-- Exception in processGameCreateRequest: " + e.getMessage());
+            logger.log("-- Exception in processGameCreateRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - CREATE_GAME Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -223,13 +225,13 @@ public class CommandHandler {
         List<GameInterface> games = new ArrayList<>();
         String subjectTail = "";
         try {
-        if (command.game() == null || command.game() == GameType.NONE) {
-            games = GameFactory.createAllGames(dslContext, logger);
-            subjectTail = "all games";
-        } else {
-            games.add(GameFactory.createGame(command.game(), dslContext, logger));
-            subjectTail = command.game().name();
-        }
+            if (command.game() == null || command.game() == GameType.NONE) {
+                games = GameFactory.createAllGames(dslContext, logger);
+                subjectTail = "all games";
+            } else {
+                games.add(GameFactory.createGame(command.game(), dslContext, logger));
+                subjectTail = command.game().name();
+            }
 
             StringBuilder sb = new StringBuilder();
             for (GameInterface game : games) {
@@ -238,7 +240,7 @@ public class CommandHandler {
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - OPEN_GAMES for " + subjectTail,
                     sb.toString());
         } catch (Exception e) {
-            logger.log("-- Exception in processOpenGamesRequest: " + e.getMessage());
+            logger.log("-- Exception in processOpenGamesRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - OPEN_GAMES Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -255,7 +257,7 @@ public class CommandHandler {
             GameInterface game = GameFactory.createGame(command.game(), dslContext, logger);
             game.processJoinGame(user, command.gameId(), emailSender);
         } catch (Exception e) {
-            logger.log("-- Exception in processJoinGameRequest: " + e.getMessage());
+            logger.log("-- Exception in processJoinGameRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - JOIN_GAME Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -269,10 +271,10 @@ public class CommandHandler {
             return;
         }
         try {
-            GameInterface game = GameFactory.createGame(command.game(), dslContext,logger);
+            GameInterface game = GameFactory.createGame(command.game(), dslContext, logger);
             game.processMove(user, command.gameId(), email, emailSender);
         } catch (Exception e) {
-            logger.log("-- Exception in processMoveRequest: " + e.getMessage());
+            logger.log("-- Exception in processMoveRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MOVE Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -289,7 +291,7 @@ public class CommandHandler {
             }
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MY_GAMES", sb.toString());
         } catch (Exception e) {
-            logger.log("-- Exception in processMyGamesRequest: " + e.getMessage());
+            logger.log("-- Exception in processMyGamesRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - MY_GAMES Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -306,7 +308,7 @@ public class CommandHandler {
             GameInterface game = GameFactory.createGame(command.game(), dslContext, logger);
             game.processStatus(user, command.gameId(), emailSender);
         } catch (Exception e) {
-            logger.log("-- Exception in processGameStatusRequest: " + e.getMessage());
+            logger.log("-- Exception in processGameStatusRequest: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - GAME_STATUS Exception",
                     TextResponseProvider.getExceptionTextBody(command.command().name(), e.getMessage()));
         }
@@ -326,10 +328,17 @@ public class CommandHandler {
 
             emailSender.sendNotificationEmail(toAddrs, email.getEmailBodyText(logger));
         } catch (Exception e) {
-            logger.log("-- Exception in processNotification: " + e.getMessage());
+            logger.log("-- Exception in processNotification: " + getStackTrace(e));
             emailSender.sendEmail(user.getEmailAddr(), "PBEMGS - notification failed!",
                     "The last notification command failed, check the logs...");
         }
+    }
+
+    private String getStackTrace(Exception e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+        return e.getMessage() + "\n\n" + sw.toString();
     }
 
 }

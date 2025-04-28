@@ -11,7 +11,7 @@ import static com.pbemgs.generated.tables.SurgePlayers.SURGE_PLAYERS;
 
 public class SurgePlayersDKO {
     private final DSLContext dslContext;
-    
+
     public SurgePlayersDKO(DSLContext dslContext) {
         this.dslContext = dslContext;
     }
@@ -22,7 +22,7 @@ public class SurgePlayersDKO {
     public List<SurgePlayersRecord> getPlayersForGame(Long gameId) {
         return dslContext.selectFrom(SURGE_PLAYERS)
                 .where(SURGE_PLAYERS.GAME_ID.eq(gameId))
-                .orderBy(SURGE_PLAYERS.PLAYER_NUMBER)
+                .orderBy(SURGE_PLAYERS.SEAT_NUMBER)
                 .fetchInto(SurgePlayersRecord.class);
     }
 
@@ -32,7 +32,7 @@ public class SurgePlayersDKO {
     public SurgePlayersRecord getPlayerByPlayerNumber(long gameId, int playerNum) {
         return dslContext.selectFrom(SURGE_PLAYERS)
                 .where(SURGE_PLAYERS.GAME_ID.eq(gameId))
-                .and(SURGE_PLAYERS.PLAYER_NUMBER.eq(playerNum))
+                .and(SURGE_PLAYERS.SEAT_NUMBER.eq(playerNum))
                 .fetchOne();
     }
 
@@ -50,7 +50,7 @@ public class SurgePlayersDKO {
         SurgePlayersRecord record = dslContext.newRecord(SURGE_PLAYERS);
         record.setUserId(userId);
         record.setGameId(gameId);
-        record.setPlayerNumber(playerNumber);
+        record.setSeatNumber(playerNumber);
         record.setStatus(SurgePlayersStatus.ACTIVE);
         record.store();
     }

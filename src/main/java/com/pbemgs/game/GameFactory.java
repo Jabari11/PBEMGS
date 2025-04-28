@@ -3,10 +3,12 @@ package com.pbemgs.game;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.game.ataxx.Ataxx;
 import com.pbemgs.game.gomoku.GoMoku;
+import com.pbemgs.game.ironclad.Ironclad;
 import com.pbemgs.game.loa.LinesOfAction;
 import com.pbemgs.game.ninetac.Ninetac;
 import com.pbemgs.game.surge.Surge;
 import com.pbemgs.game.tac.Tac;
+import com.pbemgs.game.triad.TriadCubed;
 import com.pbemgs.model.GameType;
 import org.jooq.DSLContext;
 
@@ -25,6 +27,8 @@ public class GameFactory {
             case SURGE -> new Surge(dslContext, logger);
             case LOA -> new LinesOfAction(dslContext, logger);
             case GOMOKU -> new GoMoku(dslContext, logger);
+            case TRIAD -> new TriadCubed(dslContext, logger);
+            case IRONCLAD -> new Ironclad(dslContext, logger);
             default ->
                     throw new IllegalArgumentException("GameFactory::createGame got illegal game type " + gameType.name());
         };
@@ -38,6 +42,8 @@ public class GameFactory {
         gameList.add(new Surge(dslContext, logger));
         gameList.add(new LinesOfAction(dslContext, logger));
         gameList.add(new GoMoku(dslContext, logger));
+        gameList.add(new TriadCubed(dslContext, logger));
+        gameList.add(new Ironclad(dslContext, logger));
         return gameList;
     }
 }

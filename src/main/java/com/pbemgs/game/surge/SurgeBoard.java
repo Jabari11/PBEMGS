@@ -212,7 +212,6 @@ public class SurgeBoard {
         }
 
         logger.log("Done deserializing grid.  Deserializing Pressure...");
-
         if (!pressureData.isEmpty()) {
             String[] rows = pressureData.split(";");
             for (int r = 0; r < rows.length; r++) {
@@ -224,7 +223,6 @@ public class SurgeBoard {
         }
 
         logger.log("Done deserializing pressure.  Deserializing Momentum...");
-
         momentumByGate.clear();
         if (!momentumData.isEmpty()) {
             for (String entry : momentumData.split(";")) {
@@ -242,9 +240,7 @@ public class SurgeBoard {
         }
 
         logger.log("Done deserializing board - deserializing Geysers...");
-
         deserializeGeysers(geyserData);
-        logger.log("Done deserializing Geysers - count: " + geysers.size());
     }
 
     private void deserializeGeysers(String geyserData) {
@@ -359,11 +355,15 @@ public class SurgeBoard {
         // The total factor can be a maximum of 1000 + (2 * momCeiling) but the latter having 2 incoming is
         // pretty unrealistic.
         // Let's try scaling off of 1 open gate as maxFactor, and then a pure linear scaling.
+        /*
         float maxFactor = coeffs.gateQtyFactor() * 1000 + coeffs.gateInflowFactor() * coeffs.momCeiling();
         float qtyFactor = coeffs.gateQtyFactor() * grid[loc.row()][loc.col()].getQuantity();
         float infFactor = coeffs.gateInflowFactor() * pressure[loc.row()][loc.col()];
         float pressurePct = (qtyFactor + infFactor) / maxFactor;
         return Math.max(Math.min((int) (pressurePct * coeffs.momCeiling()), coeffs.momCeiling()), coeffs.momFloor());
+
+         */
+        return 400;
     }
 
     /**
@@ -372,9 +372,9 @@ public class SurgeBoard {
      * count as an initial population of 0 for that player - these "conflict" quantities are collected
      * separately.
      * Geysers create force equal to their value on their square, which can go above max (1000).  Pushing
-     * force through the network can also go above max, but is truncated down at the end of this step.
+     * force through the network can also go above max, but is truncated down at the end of the update.
      * The combat step is handled after the movement is complete, and cuts force in all contested squares
-     * down until only one (or zero) player remains.
+     * down until only one (at most) player remains.
      */
     public void processUpdateStep(int numPlayers) {
         LocalDateTime start = LocalDateTime.now();
@@ -397,7 +397,6 @@ public class SurgeBoard {
         // SurgeSquares to process - ordered from highest quantity to lowest.
         // Initialize with all non-empty/non-obstacle squares.
         PriorityQueue<SurgeSquare> toProcess = new PriorityQueue<>(Comparator.comparingInt(SurgeSquare::getQuantity).reversed());
-        // Fill queue with all non-obstacle, non-empty squares
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 if (!grid[r][c].isObstacle() && grid[r][c].getQuantity() > 0) {
@@ -441,35 +440,49 @@ public class SurgeBoard {
                 if (!pushTo.isEmpty()) {
                     boolean updated = false;  // if any updates made, add appropriate squares for next pass
                     int equilibQty = Math.round((float) totalQty / (pushTo.size() + 1));
-                    equilibQty = Math.min(equilibQty, 1000);  // Don't move force unless there's actually room
+                    // equilibQty = Math.min(equilibQty, 1000);  // Don't move force unless there's actually room
                     logger.log("-- equilibrium qty: " + equilibQty);
                     Map<SurgeGate, Integer> ownerFlowByGate = gateFlowPerPlayer.get(locOwner);
                     for (SurgeDirection dir : pushTo.keySet()) {
                         SurgeGate pushSurgeGate = new SurgeGate(loc.row(), loc.col(), dir);
                         Location pushTarget = dir.getAdjacentLoc(loc);
+                        SurgeGate pullSurgeGate = new SurgeGate(pushTarget.row(), pushTarget.col(), dir.getOpposite());
                         int currPushTargetQty = pushTo.get(dir);
+                        Location fromLoc = new Location(loc.row(), loc.col());
+                        Location toLoc = new Location(pushTarget.row(), pushTarget.col());
+                        int diff = 0;
+                        if (equilibQty > currPushTargetQty) {
+                            // raising the adjacent loc to equilibrium
+                            int distToTarget = equilibQty - currPushTargetQty;
+                            int remainingGateLimit = momentumByGate.get(pushSurgeGate) - ownerFlowByGate.getOrDefault(pushSurgeGate, 0);
 
-                        int distToTarget = equilibQty - currPushTargetQty;
-                        int remainingGateLimit = momentumByGate.get(pushSurgeGate) - ownerFlowByGate.getOrDefault(pushSurgeGate, 0);
+                            diff = Math.min(distToTarget, remainingGateLimit);
+                            logger.log("--- push - Dir of: " + dir.name() + ", diff: " + diff);
+                        } else if (equilibQty < currPushTargetQty) {
+                            // adjacent loc < current square, but > equil.  Pull from that square to here instead.
+                            int distToTarget = currPushTargetQty - equilibQty;
+                            int remainingGateLimit = momentumByGate.get(pullSurgeGate) - ownerFlowByGate.getOrDefault(pullSurgeGate, 0);
 
-                        int diff = Math.min(distToTarget, remainingGateLimit);
-                        logger.log("--- Dir of: " + dir.name() + ", diff: " + diff);
-                        // TODO: look into separating the capacity and direction check above -
-                        //       this would allow a "pull" when appropriate (when this square is
-                        //       higher than the neighbor, but the neighbor is higher than the target).
-                        //       diff is negative in this case but it seems like a valid pull (vs
-                        //       when diff is negative due to exceeding gate capacity)
+                            diff = Math.min(distToTarget, remainingGateLimit);
+                            fromLoc = new Location(pushTarget.row(), pushTarget.col());
+                            toLoc = new Location(loc.row(), loc.col());
+                            pushSurgeGate = new SurgeGate(pushTarget.row(), pushTarget.col(), dir.getOpposite());
+                            pullSurgeGate = new SurgeGate(loc.row(), loc.col(), dir);
+                            ;
+
+                            logger.log("--- pull Dir of: " + dir.name() + ", diff: " + diff);
+                        }
+
                         if (diff > 0) {
                             // Set square diffs
-                            ForceMove deltaFrom = new ForceMove(loc.row(), loc.col(), locOwner);
-                            ForceMove deltaTo = new ForceMove(pushTarget.row(), pushTarget.col(), locOwner);
+                            ForceMove deltaFrom = new ForceMove(fromLoc.row(), fromLoc.col(), locOwner);
+                            ForceMove deltaTo = new ForceMove(toLoc.row(), toLoc.col(), locOwner);
                             qtyChangeByForce.merge(deltaFrom, -diff, Integer::sum);
                             qtyChangeByForce.merge(deltaTo, diff, Integer::sum);
 
                             // update flow tracking - positive on the current gate, negative on the receiving side.
                             ownerFlowByGate.merge(pushSurgeGate, diff, Integer::sum);
-                            SurgeGate mirrorSurgeGate = new SurgeGate(pushTarget.row(), pushTarget.col(), dir.getOpposite());
-                            ownerFlowByGate.merge(mirrorSurgeGate, -diff, Integer::sum);
+                            ownerFlowByGate.merge(pullSurgeGate, -diff, Integer::sum);
                             updated = true;
                         }
                     }  // end for (push mechanism directions)
@@ -529,6 +542,8 @@ public class SurgeBoard {
         // Combat step:
         // - Go through the combatForces map.  For each location:
         //   - add the SurgeSquare owner's data, run the algorithm, and apply the result.
+        // TODO remove logging data (?)
+        Map<Integer, Integer> combatLosses = new HashMap<>();
         for (Location fightLoc : combatForces.keySet()) {
             Map<Integer, Integer> armies = combatForces.get(fightLoc);
 
@@ -538,13 +553,14 @@ public class SurgeBoard {
             }
             logger.log("handling combat at: " + fightLoc.toString() + " - contesting: " + armies.toString());
 
-            Army result = resolveCombat(armies, grid[fightLoc.row()][fightLoc.col()].getPlayerNum());
+            Army result = resolveCombat(armies, grid[fightLoc.row()][fightLoc.col()].getPlayerNum(), combatLosses);
             grid[fightLoc.row()][fightLoc.col()].update(result.playerNum(), result.force());
         }
 
         // Post-combat data collection/aggregation step
         computeUpdatedPressures(gateFlowPerPlayer);
         computeUpdatedMomentum(gateFlowPerPlayer);
+        System.out.println("combat losses: " + combatLosses.toString());
 
         logger.log("Update time: " + Duration.between(start, LocalDateTime.now()).toMillis() + "ms");
     }
@@ -688,7 +704,7 @@ public class SurgeBoard {
     /**
      * Resolves combat among multiple forces.
      **/
-    public Army resolveCombat(Map<Integer, Integer> forceByPlayer, int defender) {
+    public Army resolveCombat(Map<Integer, Integer> forceByPlayer, int defender, Map<Integer, Integer> combatLosses) {
         if (forceByPlayer == null || forceByPlayer.isEmpty()) {
             throw new IllegalArgumentException("resolveCombat requires at least 1 force!");
         }
@@ -741,12 +757,23 @@ public class SurgeBoard {
         // If no player is dominant, then the result is a full wipe (mutual destruction).
         if (winningPlayer == null) {
             logger.log("Combat result: wipe!");
+            for (int player : forceByPlayer.keySet()) {
+                combatLosses.merge(player, forceByPlayer.get(player), Integer::sum);
+            }
             return new Army(0, 0);
         }
 
         // Round the remaining force to the nearest integer.
         int remainingForceInt = (int) Math.round(winningRemainingForce);
         Army result = new Army(winningPlayer, remainingForceInt);
+        for (int player : forceByPlayer.keySet()) {
+            if (player != winningPlayer) {
+                combatLosses.merge(player, forceByPlayer.get(player), Integer::sum);
+            } else {
+                combatLosses.merge(player, forceByPlayer.get(player) - remainingForceInt, Integer::sum);
+            }
+        }
+
         logger.log("Combat result: " + result.toString());
         return result;
     }
@@ -771,6 +798,19 @@ public class SurgeBoard {
             }
         }
         return forceByPlayerId;
+    }
+
+    /**
+     * Eliminates a player by converting all of their remaining force to player 0 (neutral)
+     */
+    public void eliminatePlayer(int playerId) {
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < cols; ++c) {
+                if (grid[r][c].getPlayerNum() == playerId) {
+                    grid[r][c].update(0, grid[r][c].getQuantity());
+                }
+            }
+        }
     }
 
 

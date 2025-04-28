@@ -33,13 +33,13 @@ public class AtaxxGameDKO {
     }
 
     // Get all active games for a user (OPEN or IN_PROGRESS)
-    public List<AtaxxGamesRecord> getActiveGamesForUser(Long playerId) {
+    public List<AtaxxGamesRecord> getActiveGamesForUser(Long userId) {
         return dslContext.selectFrom(ATAXX_GAMES)
                 .where(ATAXX_GAMES.GAME_STATE.in(AtaxxGamesGameState.OPEN, AtaxxGamesGameState.IN_PROGRESS)
-                        .and(ATAXX_GAMES.PLAYER0_ID.eq(playerId)
-                                .or(ATAXX_GAMES.PLAYER1_ID.eq(playerId))
-                                .or(ATAXX_GAMES.PLAYER2_ID.eq(playerId))
-                                .or(ATAXX_GAMES.PLAYER3_ID.eq(playerId))))
+                        .and(ATAXX_GAMES.USER0_ID.eq(userId)
+                                .or(ATAXX_GAMES.USER1_ID.eq(userId))
+                                .or(ATAXX_GAMES.USER2_ID.eq(userId))
+                                .or(ATAXX_GAMES.USER3_ID.eq(userId))))
                 .fetchInto(AtaxxGamesRecord.class);
     }
 
@@ -48,7 +48,7 @@ public class AtaxxGameDKO {
         AtaxxGamesRecord record = dslContext.newRecord(ATAXX_GAMES);
         record.setGameState(AtaxxGamesGameState.OPEN);
         record.setNumPlayers(numPlayers);
-        record.setPlayer0Id(player0Id);
+        record.setUser0Id(player0Id);
         record.setTurnOrder(turnOrder);
         record.setBoardSize(boardSize);
         record.setBoardState(boardState);
@@ -63,14 +63,14 @@ public class AtaxxGameDKO {
         if (game == null) {
             throw new IllegalArgumentException("Cannot add player: Game not found.");
         }
-        if (game.getPlayer1Id() == null) {
+        if (game.getUser1Id() == null) {
             dslContext.update(ATAXX_GAMES)
-                    .set(ATAXX_GAMES.PLAYER1_ID, newPlayerId)
+                    .set(ATAXX_GAMES.USER1_ID, newPlayerId)
                     .where(ATAXX_GAMES.GAME_ID.eq(gameId))
                     .execute();
-        } else if (game.getPlayer2Id() == null) {
+        } else if (game.getUser2Id() == null) {
             dslContext.update(ATAXX_GAMES)
-                    .set(ATAXX_GAMES.PLAYER2_ID, newPlayerId)
+                    .set(ATAXX_GAMES.USER2_ID, newPlayerId)
                     .where(ATAXX_GAMES.GAME_ID.eq(gameId))
                     .execute();
         } else {
@@ -81,10 +81,10 @@ public class AtaxxGameDKO {
     // Finalize a 2P game when player2 joins (single DB execute)
     public void completeGameCreation2P(Long gameId, Long player1Id, Long firstPlayerId) {
         int rowsUpdated = dslContext.update(ATAXX_GAMES)
-                .set(ATAXX_GAMES.PLAYER1_ID, player1Id)
+                .set(ATAXX_GAMES.USER1_ID, player1Id)
                 .set(ATAXX_GAMES.GAME_STATE, AtaxxGamesGameState.IN_PROGRESS)
-                .set(ATAXX_GAMES.PLAYER_ID_TO_MOVE, firstPlayerId)
-                .set(ATAXX_GAMES.LAST_MOVE_TIMESTAMP,LocalDateTime.now())
+                .set(ATAXX_GAMES.USER_ID_TO_MOVE, firstPlayerId)
+                .set(ATAXX_GAMES.LAST_MOVE_TIMESTAMP, LocalDateTime.now())
                 .where(ATAXX_GAMES.GAME_ID.eq(gameId))
                 .execute();
 
@@ -97,9 +97,9 @@ public class AtaxxGameDKO {
     public void completeGameCreation4P(Long gameId, Long player3Id, Long firstPlayerId) {
 
         int rowsUpdated = dslContext.update(ATAXX_GAMES)
-                .set(ATAXX_GAMES.PLAYER3_ID, player3Id)
+                .set(ATAXX_GAMES.USER3_ID, player3Id)
                 .set(ATAXX_GAMES.GAME_STATE, AtaxxGamesGameState.IN_PROGRESS)
-                .set(ATAXX_GAMES.PLAYER_ID_TO_MOVE, firstPlayerId)
+                .set(ATAXX_GAMES.USER_ID_TO_MOVE, firstPlayerId)
                 .set(ATAXX_GAMES.LAST_MOVE_TIMESTAMP, LocalDateTime.now())
                 .where(ATAXX_GAMES.GAME_ID.eq(gameId))
                 .execute();
@@ -118,7 +118,7 @@ public class AtaxxGameDKO {
         int rowsUpdated = dslContext.update(ATAXX_GAMES)
                 .set(ATAXX_GAMES.GAME_STATE, gameRecord.getGameState())
                 .set(ATAXX_GAMES.BOARD_STATE, gameRecord.getBoardState())
-                .set(ATAXX_GAMES.PLAYER_ID_TO_MOVE, gameRecord.getPlayerIdToMove())
+                .set(ATAXX_GAMES.USER_ID_TO_MOVE, gameRecord.getUserIdToMove())
                 .set(ATAXX_GAMES.LAST_MOVE_TIMESTAMP, gameRecord.getLastMoveTimestamp())
                 .where(ATAXX_GAMES.GAME_ID.eq(gameRecord.getGameId()))
                 .execute();
@@ -137,7 +137,7 @@ public class AtaxxGameDKO {
     public void updateReminderTimestamps(Set<Long> userIds, LocalDateTime updateTo) {
         dslContext.update(ATAXX_GAMES)
                 .set(ATAXX_GAMES.LAST_REMINDER_TIMESTAMP, updateTo)
-                .where(ATAXX_GAMES.PLAYER_ID_TO_MOVE.in(userIds))
+                .where(ATAXX_GAMES.USER_ID_TO_MOVE.in(userIds))
                 .execute();
     }
 }
