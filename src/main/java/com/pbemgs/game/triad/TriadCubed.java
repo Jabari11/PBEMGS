@@ -662,7 +662,7 @@ public class TriadCubed implements GameInterface {
                 trxPlayerOutcomesDKO.insertOutcome(GameType.TRIAD, game.getGameId(), winUserId,
                         PlayerOutcomesOutcome.WIN, null, winUserId == game.getFirstTurnUserId());
                 trxPlayerOutcomesDKO.insertOutcome(GameType.TRIAD, game.getGameId(), loseUserId,
-                        PlayerOutcomesOutcome.WIN, null, loseUserId == game.getFirstTurnUserId());
+                        PlayerOutcomesOutcome.LOSS, null, loseUserId == game.getFirstTurnUserId());
             });
         } catch (Exception e) {
             logger.log("-- EXCEPTION writing updated game state for " + game.getCurrentSubgame() + ": " + e.getMessage());

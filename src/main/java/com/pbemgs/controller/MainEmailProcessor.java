@@ -120,6 +120,7 @@ public class MainEmailProcessor {
                 case "gomoku" -> GameType.GOMOKU;
                 case "triad" -> GameType.TRIAD;
                 case "ironclad" -> GameType.IRONCLAD;
+                case "collapsi" -> GameType.COLLAPSI;
                 default -> null;
             };
             if (gameType == null) {

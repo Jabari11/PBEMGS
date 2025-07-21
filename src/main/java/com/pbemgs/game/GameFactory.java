@@ -2,6 +2,7 @@ package com.pbemgs.game;
 
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.pbemgs.game.ataxx.Ataxx;
+import com.pbemgs.game.collapsi.Collapsi;
 import com.pbemgs.game.gomoku.GoMoku;
 import com.pbemgs.game.ironclad.Ironclad;
 import com.pbemgs.game.loa.LinesOfAction;
@@ -29,6 +30,7 @@ public class GameFactory {
             case GOMOKU -> new GoMoku(dslContext, logger);
             case TRIAD -> new TriadCubed(dslContext, logger);
             case IRONCLAD -> new Ironclad(dslContext, logger);
+            case COLLAPSI -> new Collapsi(dslContext, logger);
             default ->
                     throw new IllegalArgumentException("GameFactory::createGame got illegal game type " + gameType.name());
         };
@@ -44,6 +46,7 @@ public class GameFactory {
         gameList.add(new GoMoku(dslContext, logger));
         gameList.add(new TriadCubed(dslContext, logger));
         gameList.add(new Ironclad(dslContext, logger));
+        gameList.add(new Collapsi(dslContext, logger));
         return gameList;
     }
 }

@@ -9,7 +9,8 @@ public enum GameType {
     LOA("LOA"),
     GOMOKU("GoMoku"),
     TRIAD("Triad"),
-    IRONCLAD("Ironclad");
+    IRONCLAD("Ironclad"),
+    COLLAPSI("Collapsi");
 
     private final String gameName;
 

@@ -1,5 +1,0 @@
-ActionApplyPeriodicDamageSE,targetType,isFriendly,splashCount,chanceToHit,seName,classification,duration,baseAmount,damageTypes,piercePct,crushPct,condition
-DOT_Burn_33,LINKED,no,0,33,Burn,MAGIC,3,5,MAGICAL|FIRE,1,0,
-DOT_Burn_100,LINKED,no,0,100,Burn,MAGIC,3,5,MAGICAL|FIRE,1,0,
-HOT_RENEW,LOWEST_HPP_ALLY,yes,0,100,Renew,MAGIC,5,-10,HEALING,1,0,
-DOT_BLOOD_FRENZY_BLEED,REACTION,no,0,100,Bleed,BLEED,2,7,PHYSICAL,1,0,

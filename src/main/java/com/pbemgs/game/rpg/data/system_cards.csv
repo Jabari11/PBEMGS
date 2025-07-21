@@ -1,6 +1,0 @@
-cardname,actions,isCantrip,spiritCost,rageIncurred
-Basic Attack,Basic Weapon Attack,no,0,0
-Wild Strike,Raging Wild Strike,no,0,0
-Drained Spirit,STATUS_Drained Spirit Weak|STATUS_Drained Spirit Vuln,no,0,0
-Ironhide Basic,Ironhide Basic Attack,no,0,0
-Ironhide Gore,Ironhide Strong Attack,no,0,0

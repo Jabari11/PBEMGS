@@ -103,8 +103,9 @@ public class TextResponseProvider {
                 "- surge: A real-time strategy battle of liquid force and momentum — flood your enemies away! (HTML email required.)\n" +
                 "- loa: Lines of Action – Connect your pieces with clever, dynamic movement before your opponent does!\n" +
                 "- gomoku: The timeless 5-in-a-row connection game — simple to learn, hard to master!\n" +
-                "- triad: Triad Cubed - A strategic best-of-three twist on the classic FF8 card placement game! (HTML email required.)\n\n" +
-                "- ironclad: ironclad: Robots with lasers. Go stones with ambition. Two games on one board - and one win condition will end it all.\n" +
+                "- triad: Triad Cubed - A strategic best-of-three twist on the classic FF8 card placement game! (HTML email required.)\n" +
+                "- ironclad: Robots with lasers. Go stones with ambition. Two games on one board - and one win condition will end it all.\n" +
+                "- collapsi: Move your pawn around a grid that collapses behind you, and try to trap the opponent.\n\n" +
                 "Tutorial:\n" +
                 "- tac: A guided tutorial game for new players.\n\n" +
                 "In Development:\n" +

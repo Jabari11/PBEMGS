@@ -1,6 +1,0 @@
-1. Weapon riders (see table)
-2. GD: dial setting
-3. GD: full talent trees
-4. Action modification SEs.
-5. Immunity SEs (immune to SE class, damage, etc)
-6. outer game loop start (?)

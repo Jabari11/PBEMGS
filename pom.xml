@@ -174,7 +174,7 @@
                 <artifactId>jooq-codegen-maven</artifactId>
                 <version>3.18.0</version>
                 <executions>
-                    <!--
+                <!--
                     <execution>
                         <id>generate-jooq-code</id>
                         <phase>generate-sources</phase>

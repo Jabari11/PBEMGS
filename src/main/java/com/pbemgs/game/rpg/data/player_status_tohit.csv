@@ -1,6 +1,0 @@
-ActionApplyChanceToHitModificationSE,targetType,isFriendly,splashCount,chanceToHit,seName,classification,appliesAsActor,duration,charges,scaling,affectedSet,condition
-STATUS_BLINK,SELF,yes,0,100,Blink,MAGIC,no,INF,1,-150,WEAPON_ATTACK|NONWEAPON_ATTACK,
-STATUS_SIGIL_EXP,LINKED,no,0,100,Sigil - Exposed,MAGIC,no,4,INF,10,ALL,
-STATUS_WARDE_GUID,SELF,yes,0,100,Warde’s Guidance,MAGIC,yes,4,INF,10,ALL,
-STATUS_HMARK_EXPOSE,LINKED,no,0,100,Mark - Exposed,MAGIC,no,3,INF,15,WEAPON_ATTACK|NONWEAPON_ATTACK,
-STATUS_BLUR,SELF,yes,0,100,Blur,PHYSICAL,no,3,INF,-25,ALL,
